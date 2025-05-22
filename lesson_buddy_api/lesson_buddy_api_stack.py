@@ -4,16 +4,21 @@ from aws_cdk import (
     # aws_sqs as sqs,
 )
 from constructs import Construct
+from .functions import FunctionStack
+from .authentication import AuthenticationStack
+from .tables import Tables # Added import
+from .buckets import Buckets # Added import
 
 class LessonBuddyApiStack(Stack):
 
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
-        # The code that defines your stack goes here
+        # Instantiate Tables and Buckets
+        tables = Tables(self, "LessonBuddyTables")
+        buckets = Buckets(self, "LessonBuddyBuckets")
 
-        # example resource
-        # queue = sqs.Queue(
-        #     self, "LessonBuddyApiQueue",
-        #     visibility_timeout=Duration.seconds(300),
-        # )
+        # Add the FunctionStack and AuthenticationStack to the main stack
+        # Pass the table and bucket to the FunctionStack
+        function_stack = FunctionStack(self, "FunctionStack", course_table=tables.table, lesson_bucket=buckets.bucket)
+        authentication_stack = AuthenticationStack(self, "AuthenticationStack")

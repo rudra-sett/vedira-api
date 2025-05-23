@@ -10,7 +10,7 @@ import json
 class LessonBuddyApiGateway(Construct):
     def __init__(self, scope: Construct, id: str,
                  generate_chapter_sfn: sfn.IStateMachine,
-                 generate_lesson_plan_function: _lambda.IFunction,
+                 generate_course_plan_function: _lambda.IFunction,
                  get_course_list_function: _lambda.IFunction,
                  get_lesson_content_function: _lambda.IFunction,
                  get_lesson_plan_function: _lambda.IFunction,
@@ -77,7 +77,7 @@ class LessonBuddyApiGateway(Construct):
         )
 
         # Integrations for Lambda functions (assuming proxy integration)
-        generate_lesson_plan_integration = apigw.LambdaIntegration(generate_lesson_plan_function)
+        generate_lesson_plan_integration = apigw.LambdaIntegration(generate_course_plan_function)
         get_course_list_integration = apigw.LambdaIntegration(get_course_list_function)
         get_lesson_content_integration = apigw.LambdaIntegration(get_lesson_content_function)
         get_lesson_plan_integration = apigw.LambdaIntegration(get_lesson_plan_function)
@@ -98,7 +98,7 @@ class LessonBuddyApiGateway(Construct):
         )
 
         # /generate-lesson-plan
-        generate_lesson_plan_resource = api.root.add_resource("generate-lesson-plan")
+        generate_lesson_plan_resource = api.root.add_resource("generate-course-plan")
         generate_lesson_plan_resource.add_method("POST", generate_lesson_plan_integration)
 
         # /get-course-list
@@ -110,7 +110,7 @@ class LessonBuddyApiGateway(Construct):
         get_lesson_content_resource.add_method("GET", get_lesson_content_integration)
 
         # /get-lesson-plan
-        get_lesson_plan_resource = api.root.add_resource("get-lesson-plan")
+        get_lesson_plan_resource = api.root.add_resource("get-course-plan")
         get_lesson_plan_resource.add_method("GET", get_lesson_plan_integration)
 
         self.api = api

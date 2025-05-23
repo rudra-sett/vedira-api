@@ -15,8 +15,8 @@ class LessonBuddyApiStack(Stack):
         super().__init__(scope, construct_id, **kwargs)
 
         # Instantiate Tables and Buckets
-        tables = Tables(self, "LessonBuddyTables")
-        buckets = Buckets(self, "LessonBuddyBuckets")
+        tables = Tables(self, "TableStack")
+        buckets = Buckets(self, "BucketStack")
 
         # Add the FunctionStack and AuthenticationStack to the main stack
         # Pass the table and bucket to the FunctionStack

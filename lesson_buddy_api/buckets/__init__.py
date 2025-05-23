@@ -10,7 +10,7 @@ class Buckets(Construct):
 
         self.bucket = s3.Bucket(
             self, "LessonContentS3Bucket",
-            bucket_name="lesson-content-bucket",
+            # bucket_name="lesson-content-bucket",
             removal_policy=RemovalPolicy.DESTROY,
             auto_delete_objects=True
         )

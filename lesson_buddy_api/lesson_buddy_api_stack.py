@@ -16,8 +16,8 @@ class LessonBuddyApiStack(Stack):
         super().__init__(scope, construct_id, **kwargs)
 
         # Instantiate Tables and Buckets
-        tables = Tables(self, "TableStack")
-        buckets = Buckets(self, "BucketStack")
+        tables = Tables(self, "Tables")
+        buckets = Buckets(self, "Buckets")
 
         # Add the FunctionStack and AuthenticationStack to the main stack
         # Pass the table and bucket to the FunctionStack
@@ -29,7 +29,7 @@ class LessonBuddyApiStack(Stack):
         # generate_course_plan_sfn, generate_lesson_content_lambda,
         # get_all_courses_lambda, get_lesson_content_lambda, get_course_plan_lambda
         api_gateway_stack = LessonBuddyApiGateway(
-            self, "ApiGatewayStack",
+            self, "ApiGateway",
             generate_chapter_sfn=functions.course_generation_sfn,
             generate_lesson_plan_function=functions.generate_lesson_content_function,
             get_course_list_function=functions.get_all_courses_function,

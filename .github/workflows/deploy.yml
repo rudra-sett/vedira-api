@@ -1,0 +1,47 @@
+name: Deploy to AWS
+
+on:
+  push:
+    branches:
+      - main # Or your default branch
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: default # Specify the environment name
+    permissions:
+      id-token: write # Required for OIDC
+      contents: read # Required to checkout the code
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }} # Use environment secret for AWS Role
+          aws-region: us-east-1 # Replace with your desired AWS region
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x' # Specify your Python version
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt # If you have dev dependencies like aws-cdk-lib
+
+      - name: Install AWS CDK
+        run: npm install -g aws-cdk
+
+      - name: CDK Bootstrap (if needed)
+        run: cdk bootstrap aws://${{ secrets.AWS_ACCOUNT_ID }}/us-east-1 # Replace with your region if not bootstrapped
+        continue-on-error: true # In case it's already bootstrapped
+
+      - name: Deploy CDK stack
+        env:
+          API_KEY: ${{ secrets.API_KEY }} # Make API_KEY available to CDK
+        run: cdk deploy --all --require-approval never

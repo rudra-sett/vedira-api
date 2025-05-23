@@ -9,9 +9,13 @@ class Tables(Construct):
         super().__init__(scope, id, **kwargs)
 
         self.table = dynamodb.Table(
-            self, "CoursePlanDynamoDBTable",
+            self, "CoursePlanTable",
             partition_key=dynamodb.Attribute(
                 name="CourseID", # From generate_course_plan
+                type=dynamodb.AttributeType.STRING
+            ),
+            sort_key=dynamodb.Attribute(
+                name="UserID",
                 type=dynamodb.AttributeType.STRING
             ),
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,

@@ -30,25 +30,50 @@ class LessonBuddyApiGateway(Construct):
         # Integration for /generate-chapter (Step Function)
         # This uses StartExecution, which is asynchronous.
         # The API will return immediately after starting the Step Function.
-        # For synchronous execution (e.g., for Express Step Functions),
-        # a different integration (apigw.AwsIntegration with action "StartSyncExecution") would be needed.
-        generate_chapter_integration = apigw.StepFunctionsIntegration.start_execution(
-            generate_chapter_sfn,
-            passthrough_behavior=apigw.PassthroughBehavior.NEVER, # Ensure request body is processed
-            request_templates={
-                "application/json": json.dumps({
-                    "input": "$util.escapeJavaScript($input.json('$'))",
-                    "stateMachineArn": generate_chapter_sfn.state_machine_arn
-                })
-            },
-            integration_responses=[
-                apigw.IntegrationResponse(
-                    status_code="200",
-                    response_templates={
-                        "application/json": json.dumps({"message": "Execution started", "executionArn": "$context.awsRequestId"}) # Example response
-                    }
-                )
-            ]
+        # We will use AwsIntegration for explicit control.
+
+        # Create an IAM role for API Gateway to invoke Step Functions
+        api_gw_sfn_role = iam.Role(
+            self, "ApiGatewayStepFunctionsRole",
+            assumed_by=iam.ServicePrincipal("apigateway.amazonaws.com")
+        )
+
+        # Add a policy to the role to allow starting execution of the state machine
+        api_gw_sfn_role.add_to_policy(iam.PolicyStatement(
+            actions=["states:StartExecution"],
+            resources=[generate_chapter_sfn.state_machine_arn]
+        ))
+
+        generate_chapter_integration = apigw.AwsIntegration(
+            service="states",
+            action="StartExecution", # Explicitly use StartExecution
+            options=apigw.IntegrationOptions(
+                credentials_role=api_gw_sfn_role,
+                passthrough_behavior=apigw.PassthroughBehavior.NEVER,
+                request_templates={
+                    "application/json": json.dumps({
+                        "input": "$util.escapeJavaScript($input.json('$'))",
+                        "stateMachineArn": generate_chapter_sfn.state_machine_arn
+                    })
+                },
+                integration_responses=[
+                    apigw.IntegrationResponse(
+                        status_code="200",
+                        response_templates={
+                            "application/json": json.dumps({
+                                "message": "Execution started successfully.",
+                                # $input refers to the output of the StartExecution call
+                                "executionArn": "$util.escapeJavaScript($input.json('$.executionArn'))",
+                                "startDate": "$util.escapeJavaScript($input.json('$.startDate'))"
+                            })
+                        },
+                        # Ensure headers are set for the response
+                        response_parameters={
+                            'method.response.header.Content-Type': "'application/json'"
+                        }
+                    )
+                ]
+            )
         )
 
         # Integrations for Lambda functions (assuming proxy integration)

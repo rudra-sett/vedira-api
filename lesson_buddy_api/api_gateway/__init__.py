@@ -89,7 +89,12 @@ class LessonBuddyApiGateway(Construct):
         generate_chapter_resource.add_method(
             "POST",
             generate_chapter_integration,
-            method_responses=[apigw.MethodResponse(status_code="200")] # Define expected method response
+            method_responses=[apigw.MethodResponse(
+                status_code="200",
+                response_parameters={
+                    'method.response.header.Content-Type': True
+                }
+            )] # Define expected method response
         )
 
         # /generate-lesson-plan

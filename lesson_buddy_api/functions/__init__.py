@@ -20,7 +20,7 @@ class FunctionStack(Stack):
         load_dotenv() # Ensure .env is loaded for API_KEY
 
         # Add function to the stack from folder generate_course
-        generate_course_plan_function = _lambda.Function(
+        self.generate_course_plan_function = _lambda.Function(
             self, "GenerateCourseFunction",
             runtime=_lambda.Runtime.PYTHON_3_13,
             handler="lambda_handler.lambda_handler",
@@ -29,52 +29,52 @@ class FunctionStack(Stack):
                 "API_KEY": os.environ.get("API_KEY", "")
             }
         )
-        course_table.grant_write_data(generate_course_plan_function)
+        course_table.grant_write_data(self.generate_course_plan_function)
 
         # Add function to the stack from folder get_lesson_content
-        get_lesson_content_function = _lambda.Function(
+        self.get_lesson_content_function = _lambda.Function(
             self, "GetLessonContentFunction",
             runtime=_lambda.Runtime.PYTHON_3_13,
             handler="lambda_handler.lambda_handler",
             code=_lambda.Code.from_asset("lesson_buddy_api/functions/get_lesson_content"),
         )
-        lesson_bucket.grant_read(get_lesson_content_function)
+        lesson_bucket.grant_read(self.get_lesson_content_function)
 
         # Add function to the stack from folder get_all_courses
-        get_all_courses_function = _lambda.Function(
+        self.get_all_courses_function = _lambda.Function(
             self, "GetAllCoursesFunction",
             runtime=_lambda.Runtime.PYTHON_3_13,
             handler="lambda_handler.lambda_handler",
             code=_lambda.Code.from_asset("lesson_buddy_api/functions/get_all_courses"),
         )
-        course_table.grant_read_data(get_all_courses_function)
+        course_table.grant_read_data(self.get_all_courses_function)
         
         # Add function to the stack from folder get_course_plan
-        get_course_plan_function = _lambda.Function(
+        self.get_course_plan_function = _lambda.Function(
             self, "GetCoursePlanFunction",
             runtime=_lambda.Runtime.PYTHON_3_13,
             handler="lambda_handler.lambda_handler", 
             code=_lambda.Code.from_asset("lesson_buddy_api/functions/get_course_plan"),
         )
-        course_table.grant_read_data(get_course_plan_function)
+        course_table.grant_read_data(self.get_course_plan_function)
 
         # Add function to the stack from folder generate_lesson_content
-        generate_lesson_content_function = _lambda.Function(
+        self.generate_lesson_content_function = _lambda.Function(
             self, "GenerateLessonContentFunction",
             runtime=_lambda.Runtime.PYTHON_3_13,
             handler="lambda_handler.lambda_handler", 
             code=_lambda.Code.from_asset("lesson_buddy_api/functions/generate_lesson_content"),
         )
-        lesson_bucket.grant_write(generate_lesson_content_function)
+        lesson_bucket.grant_write(self.generate_lesson_content_function)
 
         # Add function to the stack from folder mark_lesson_generated
-        mark_lesson_generated_function = _lambda.Function(
+        self.mark_lesson_generated_function = _lambda.Function(
             self, "MarkLessonGeneratedFunction",
             runtime=_lambda.Runtime.PYTHON_3_13,
             handler="lambda_handler.lambda_handler", 
             code=_lambda.Code.from_asset("lesson_buddy_api/functions/mark_lesson_generated"),
         )
-        course_table.grant_write_data(mark_lesson_generated_function)
+        course_table.grant_write_data(self.mark_lesson_generated_function)
 
         step_function_definition = '''
         {
@@ -86,7 +86,7 @@ class FunctionStack(Stack):
             "Resource": "arn:aws:states:::lambda:invoke",
             "Output": "{% $states.result.Payload %}",
             "Arguments": {
-                "FunctionName": "''' +  get_course_plan_function.function_arn + '''",
+                "FunctionName": "''' +  self.get_course_plan_function.function_arn + '''",
                 "Payload": {
                 "queryStringParameters": {
                     "course_id": "{% $states.input.course_id %}",
@@ -136,7 +136,7 @@ class FunctionStack(Stack):
                     "Resource": "arn:aws:states:::lambda:invoke",
                     "Output": "{% $states.result.Payload %}",
                     "Arguments": {
-                    "FunctionName": "'''+generate_lesson_content_function.function_arn+'''",
+                    "FunctionName": "'''+self.generate_lesson_content_function.function_arn+'''",
                     "Payload": {
                         "body": {
                         "lesson_id": "{% $states.input.id %}",
@@ -171,7 +171,7 @@ class FunctionStack(Stack):
             "Resource": "arn:aws:states:::lambda:invoke",
             "Output": "{% $states.result.Payload %}",
             "Arguments": {
-                "FunctionName": "'''+mark_lesson_generated_function.function_arn+'''",
+                "FunctionName": "'''+self.mark_lesson_generated_function.function_arn+'''",
                 "Payload": {
                 "updated_lessons": "{% $states.input %}",
                 "course_plan": "{% $course_plan %}"
@@ -198,17 +198,17 @@ class FunctionStack(Stack):
         }
         '''
 
-        course_generation_sfn = sfn.StateMachine(
+        self.course_generation_sfn = sfn.StateMachine(
             self, "ChapterGenerationStateMachine",
             definition_body=sfn.DefinitionBody.from_string(step_function_definition),
             state_machine_name="CourseGenerationStateMachine" # Added a more descriptive name
         )
         
         lambda_functions_to_invoke = [
-            get_course_plan_function,
-            generate_lesson_content_function,
-            mark_lesson_generated_function
+            self.get_course_plan_function,
+            self.generate_lesson_content_function,
+            self.mark_lesson_generated_function
         ]
 
         for lambda_func in lambda_functions_to_invoke:
-            lambda_func.grant_invoke(course_generation_sfn.role)
+            lambda_func.grant_invoke(self.course_generation_sfn.role)

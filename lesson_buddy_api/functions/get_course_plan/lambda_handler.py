@@ -1,5 +1,6 @@
 import json
 import boto3
+import os
 
 def lambda_handler(event, context):
     print(event)
@@ -11,9 +12,12 @@ def lambda_handler(event, context):
 
     # pull from dynamo
     dynamodb = boto3.resource('dynamodb')
-    table = dynamodb.Table('LB-CourseTable')
+    table_name = os.environ.get('COURSE_TABLE_NAME')
+    if not table_name:
+        raise ValueError("COURSE_TABLE_NAME environment variable not set.")
+    table = dynamodb.Table(table_name)
     # get item with key and sort key
-    item = table.get_item(Key={'CourseID': course_id, 'UserID': user_id})    
+    item = table.get_item(Key={'CourseID': course_id, 'UserID': user_id})
     course = item['Item']    
         
     if chapter_id:

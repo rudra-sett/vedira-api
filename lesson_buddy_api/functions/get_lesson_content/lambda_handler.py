@@ -1,5 +1,6 @@
 import json
 import boto3
+import os
 
 def lambda_handler(event, context):
     
@@ -13,7 +14,10 @@ def lambda_handler(event, context):
     s3 = boto3.client('s3')
 
     try:
-        response = s3.get_object(Bucket='lb-lesson-bucket', Key=content_key)
+        bucket_name = os.environ.get('LESSON_BUCKET_NAME')
+        if not bucket_name:
+            raise ValueError("LESSON_BUCKET_NAME environment variable not set.")
+        response = s3.get_object(Bucket=bucket_name, Key=content_key)
         content = response['Body'].read().decode('utf-8')
         return {
             'statusCode': 200,
@@ -30,4 +34,3 @@ def lambda_handler(event, context):
             'statusCode': 500,
             'body': 'Some other error!'
         }
-

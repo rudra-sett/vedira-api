@@ -1,5 +1,5 @@
 import json
-from  urllib import request, parse
+from urllib import request, parse, error as urllib_error # Added urllib_error
 import boto3
 import time
 import os
@@ -31,9 +31,12 @@ def lambda_handler(event, context):
 
     # save to s3
     s3 = boto3.client('s3')
-    s3.put_object(Bucket='lb-lesson-bucket', Key=f"{course_plan['CourseID']}-{chapter_id}-{lesson_id}.md", Body=final_lesson)
+    bucket_name = os.environ.get('LESSON_BUCKET_NAME')
+    if not bucket_name:
+        raise ValueError("LESSON_BUCKET_NAME environment variable not set.")
+    s3.put_object(Bucket=bucket_name, Key=f"{course_plan['CourseID']}-{chapter_id}-{lesson_id}.md", Body=final_lesson)
     
-    return {        
+    return {
         "chapter_id" : chapter_id,
         "lesson_id" : lesson_id                
     }
@@ -106,9 +109,12 @@ def call_model(system_prompt, prompt, messages=None, output_format=None, tools=N
             if attempt == max_retries:  # Last attempt failed
                 print(f"Error: Final attempt failed after {max_retries} retries: {e}")
                 return None
+            
+            is_http_error = isinstance(e, request.HTTPError)
+            is_url_error = isinstance(e, urllib_error.URLError) # Changed to urllib_error.URLError
                 
             # Check if it's a 503 error or other retryable error
-            if hasattr(e, 'code') and e.code == 503 or isinstance(e, (request.HTTPError, request.URLError)):
+            if (is_http_error and e.code == 503) or is_url_error:
                 # Calculate delay with exponential backoff and jitter
                 delay = min(base_delay * (2 ** attempt), max_delay)
                 jitter = delay * 0.1 * (0.5 - (0.5 * attempt / max_retries))  # Add some jitter
@@ -169,7 +175,7 @@ def main_agent(course_plan, lesson_data, chapter_info):
     
     Here is the information on the lesson you are creating and curating content for: {lesson_data}. Ensure all aspects of the lesson are addressed.    
     The current lesson chunks, if any, are: 
-    {"\n".join(lesson_chunks.keys())}
+    {'\n'.join(lesson_chunks.keys())}
     Only complete the lesson generation after ALL aspects and portions of the lesson are completed.
 
     This is the number of times each lesson chunk has been re-written. Please do not exceed 3 re-writes.
@@ -246,24 +252,42 @@ def main_agent(course_plan, lesson_data, chapter_info):
         prompt = f"Please proceed.",
         messages = messages,
         tools=tools)
-        # print(output['content'])
+        
+        if output is None:
+            print("Error: call_model returned None in main_agent. Aborting.")
+            # Potentially return an error state or raise an exception
+            return lesson_chunks # Or an empty dict, or handle error appropriately
+
         messages.append(output)
-        if 'tool_calls' in output:
+        tool_result = None # Initialize tool_result
+
+        if 'tool_calls' in output and output['tool_calls'] is not None:
             completed = False
             for tool_call in output['tool_calls']:
                 args = json.loads(tool_call['function']['arguments'])
                 if tool_call['function']['name'] == 'generate_lesson_content':
                     tool_result = generate_lesson_content(**args)
                 elif tool_call['function']['name'] == 'assess_lesson_content':
-                    tool_result = assess_lesson_content(**args)['content']
+                    assessment = assess_lesson_content(**args)
+                    tool_result = assessment['content'] if assessment and 'content' in assessment else "Assessment error or no content."
                 elif tool_call['function']['name'] == 'complete_lesson_generation':
                     completed = True
                     break
-                messages.append({
-                    "role": "tool",
-                    "content": tool_result,
-                    "tool_call_id": tool_call['id']
-                })
+                
+                if tool_result is not None: # Ensure tool_result was set
+                    messages.append({
+                        "role": "tool",
+                        "content": tool_result,
+                        "tool_call_id": tool_call['id']
+                    })
+                else:
+                    # Handle case where tool_result might not have been set (e.g. unknown tool name)
+                    print(f"Warning: tool_result not set for tool_call: {tool_call['function']['name']}")
+                    messages.append({
+                        "role": "tool",
+                        "content": "Error: Tool execution failed or tool name not recognized.",
+                        "tool_call_id": tool_call['id']
+                    })
         else:
             completed = True            
     return lesson_chunks
@@ -288,22 +312,27 @@ def generate_lesson_content(prompt,lesson_chunk):
         "required": ["lesson_content"]#, "lesson_chunk"]
     }
     
-    system_prompt = f'''
+    system_prompt = f"""
         You are an expert educator. Generate a portion of a lesson based on the instructions/topic the user provides you.
         In some cases, you may be asked to modify an existing portion of a lesson with some feedback. If that is the case,
         this is the existing section of that lesson: 
 
         ```
-        {lesson_chunks.get(lesson_chunk,'')}
+        {lesson_chunks.get(lesson_chunk, '')}
         ```
 
         Make sure to just output the lesson content, no additional niceties or metadata.
-    '''
+    """
     try:
-        lesson_gen_output = call_model(system_prompt, prompt)['content']        
-        lesson_chunks[lesson_chunk] = lesson_gen_output #['lesson_content']
-        generation_counts[lesson_chunk] = generation_counts.get(lesson_chunk, 0) + 1
-        return f"Sucessfully generated content for chunk {lesson_chunk} and saved it, please call the assessor. The total word count of the lesson is {len(" ".join(lesson_chunks.values()))}"
+        model_output = call_model(system_prompt, prompt)
+        if model_output and 'content' in model_output:
+            lesson_gen_output = model_output['content']
+            lesson_chunks[lesson_chunk] = lesson_gen_output
+            generation_counts[lesson_chunk] = generation_counts.get(lesson_chunk, 0) + 1
+            return f"Sucessfully generated content for chunk {lesson_chunk} and saved it, please call the assessor. The total word count of the lesson is {len(' '.join(lesson_chunks.values()))}"
+        else:
+            print(f"Error: call_model did not return expected output for chunk {lesson_chunk}")
+            return f"Error generating content for chunk {lesson_chunk}: No content from model."
     except Exception as e:
         print(e)
         return f"Error generating lesson content: {e}"
@@ -325,4 +354,9 @@ def assess_lesson_content(system_prompt):
         "required": ["approved", "feedback"]
     }
     
-    return call_model(system_prompt, json.dumps(lesson_chunks))
+    model_output = call_model(system_prompt, json.dumps(lesson_chunks))
+    if model_output:
+        return model_output
+    else:
+        print("Error: call_model returned None in assess_lesson_content.")
+        return {"feedback": "Error during assessment.", "approved": False}

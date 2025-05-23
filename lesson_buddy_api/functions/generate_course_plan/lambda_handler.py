@@ -33,7 +33,10 @@ def lambda_handler(event, context):
         
         # save to dynamodb
         dynamodb = boto3.resource('dynamodb')
-        table = dynamodb.Table('LB-CourseTable') # type: ignore
+        table_name = os.environ.get('COURSE_TABLE_NAME')
+        if not table_name:
+            raise ValueError("COURSE_TABLE_NAME environment variable not set.")
+        table = dynamodb.Table(table_name) # type: ignore
         table.put_item(Item=course_plan)
         print('Saved to DynamoDB')
 
@@ -182,5 +185,3 @@ def generate_course_plan(topic, timeline, difficulty, custom_instructions):
     Custom Instructions: {custom_instructions}
     """
     return call_model(system_prompt, course_plan_schema)
-
-

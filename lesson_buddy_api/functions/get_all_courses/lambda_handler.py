@@ -1,5 +1,6 @@
 import json
 import boto3
+import os
 
 def lambda_handler(event, context):
     
@@ -10,7 +11,10 @@ def lambda_handler(event, context):
     # get all items from LB-CourseTable based on UserID, using UserID-index index
 
     dynamodb = boto3.resource('dynamodb')
-    table = dynamodb.Table('LB-CourseTable') # type: ignore
+    table_name = os.environ.get('COURSE_TABLE_NAME')
+    if not table_name:
+        raise ValueError("COURSE_TABLE_NAME environment variable not set.")
+    table = dynamodb.Table(table_name) # type: ignore
     items = table.query(
         IndexName='UserID-index',
         KeyConditionExpression=boto3.dynamodb.conditions.Key('UserID').eq(UserID) # type: ignore

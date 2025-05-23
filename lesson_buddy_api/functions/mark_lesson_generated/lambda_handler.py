@@ -1,5 +1,6 @@
 import json
 import boto3
+import os
 
 def lambda_handler(event, context):
         
@@ -15,7 +16,10 @@ def lambda_handler(event, context):
 
     # save to dynamodb
     dynamodb = boto3.resource('dynamodb')
-    table = dynamodb.Table('LB-CourseTable') # type: ignore
+    table_name = os.environ.get('COURSE_TABLE_NAME')
+    if not table_name:
+        raise ValueError("COURSE_TABLE_NAME environment variable not set.")
+    table = dynamodb.Table(table_name) # type: ignore
     table.put_item(Item=course_plan)
 
     return {

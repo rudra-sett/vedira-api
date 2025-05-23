@@ -1,5 +1,5 @@
 from aws_cdk import (
-    # Duration,
+    Duration,
     # Stack, # Will be changed to Construct
     aws_lambda as _lambda,
     aws_stepfunctions as sfn,
@@ -25,8 +25,10 @@ class Functions(Construct): # Changed from Stack to Construct
             runtime=_lambda.Runtime.PYTHON_3_13,
             handler="lambda_handler.lambda_handler",
             code=_lambda.Code.from_asset("lesson_buddy_api/functions/generate_course_plan"),
+            timeout=Duration.minutes(15),
             environment={
-                "API_KEY": os.environ.get("API_KEY", "")
+                "API_KEY": os.environ.get("API_KEY", ""),
+                "COURSE_TABLE_NAME": course_table.table_name
             }
         )
         course_table.grant_write_data(self.generate_course_plan_function)
@@ -37,6 +39,10 @@ class Functions(Construct): # Changed from Stack to Construct
             runtime=_lambda.Runtime.PYTHON_3_13,
             handler="lambda_handler.lambda_handler",
             code=_lambda.Code.from_asset("lesson_buddy_api/functions/get_lesson_content"),
+            timeout=Duration.minutes(15),
+            environment={
+                "LESSON_BUCKET_NAME": lesson_bucket.bucket_name
+            }
         )
         lesson_bucket.grant_read(self.get_lesson_content_function)
 
@@ -46,6 +52,10 @@ class Functions(Construct): # Changed from Stack to Construct
             runtime=_lambda.Runtime.PYTHON_3_13,
             handler="lambda_handler.lambda_handler",
             code=_lambda.Code.from_asset("lesson_buddy_api/functions/get_all_courses"),
+            timeout=Duration.minutes(15),
+            environment={
+                "COURSE_TABLE_NAME": course_table.table_name
+            }
         )
         course_table.grant_read_data(self.get_all_courses_function)
         
@@ -55,6 +65,10 @@ class Functions(Construct): # Changed from Stack to Construct
             runtime=_lambda.Runtime.PYTHON_3_13,
             handler="lambda_handler.lambda_handler", 
             code=_lambda.Code.from_asset("lesson_buddy_api/functions/get_course_plan"),
+            timeout=Duration.minutes(15),
+            environment={
+                "COURSE_TABLE_NAME": course_table.table_name
+            }
         )
         course_table.grant_read_data(self.get_course_plan_function)
 
@@ -64,6 +78,11 @@ class Functions(Construct): # Changed from Stack to Construct
             runtime=_lambda.Runtime.PYTHON_3_13,
             handler="lambda_handler.lambda_handler", 
             code=_lambda.Code.from_asset("lesson_buddy_api/functions/generate_lesson_content"),
+            timeout=Duration.minutes(15),
+            environment={
+                "API_KEY": os.environ.get("API_KEY", ""),
+                "LESSON_BUCKET_NAME": lesson_bucket.bucket_name
+            }
         )
         lesson_bucket.grant_write(self.generate_lesson_content_function)
 
@@ -73,6 +92,10 @@ class Functions(Construct): # Changed from Stack to Construct
             runtime=_lambda.Runtime.PYTHON_3_13,
             handler="lambda_handler.lambda_handler", 
             code=_lambda.Code.from_asset("lesson_buddy_api/functions/mark_lesson_generated"),
+            timeout=Duration.minutes(15),
+            environment={
+                "COURSE_TABLE_NAME": course_table.table_name
+            }
         )
         course_table.grant_write_data(self.mark_lesson_generated_function)
 

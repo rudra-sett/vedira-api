@@ -31,7 +31,7 @@ def lambda_handler(event, context):
 
     # save to s3
     s3 = boto3.client('s3')
-    s3.put_object(Bucket='lb-lesson-bucket', Key=f'{course_plan['CourseID']}-{chapter_id}-{lesson_id}.md', Body=final_lesson)
+    s3.put_object(Bucket='lb-lesson-bucket', Key=f"{course_plan['CourseID']}-{chapter_id}-{lesson_id}.md", Body=final_lesson)
     
     return {        
         "chapter_id" : chapter_id,
@@ -44,14 +44,15 @@ def get_api_info(provider):
         url = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'
         api_key = os.environ['API_KEY']
         return url, api_key, 'gemini-2.5-flash-preview-04-17'
-    if provider == 'deepseek':
-        url = 'https://api.deepseek.com/chat/completions'
-        api_key = ''        
-        return url, api_key,'deepseek-chat'
-    if provider == 'openai':
-        url = 'https://api.openai.com/v1/responses'
-        api_key = ''        
-        return url, api_key, 'gpt-4.1-mini-2025-04-14'
+    # maybe try other LLMs
+    # if provider == 'deepseek':
+    #     url = 'https://api.deepseek.com/chat/completions'
+    #     api_key = ''        
+    #     return url, api_key,'deepseek-chat'
+    # if provider == 'openai':
+    #     url = 'https://api.openai.com/v1/responses'
+    #     api_key = ''        
+    #     return url, api_key, 'gpt-4.1-mini-2025-04-14'
 
 def call_model(system_prompt, prompt, messages=None, output_format=None, tools=None, provider='google'):
 

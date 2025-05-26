@@ -10,7 +10,7 @@ def lambda_handler(event, context):
     chapter_id = data.get('chapter_id')
     lesson_id = data.get('lesson_id')
 
-    content_key = f'{course_id}-{chapter_id}-{lesson_id}.md'
+    content_key = f'{course_id}-{chapter_id}-{lesson_id}.json'
     s3 = boto3.client('s3')
 
     try:

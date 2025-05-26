@@ -40,24 +40,36 @@ def lambda_handler(event, context):
     }
 
 
-def get_api_info(provider):
-    if provider == 'google':
+def get_api_info(model):
+    if model == 'gemini-2.5-flash':
         url = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'
         api_key = os.environ['API_KEY']
         return url, api_key, 'gemini-2.5-flash-preview-04-17'
+    if model == 'gemini-2.5-pro':
+        url = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'
+        api_key = os.environ['API_KEY']
+        return url, api_key, 'gemini-2.5-pro-preview-05-06'
+    if model == 'claude-4-sonnet':
+        url = 'http://Bedroc-Proxy-xVtSm3tV6xYe-1727257641.us-east-1.elb.amazonaws.com/api/v1/chat/completions'
+        api_key = os.environ['BEDROCK_API_KEY']
+        return url, api_key, 'us.anthropic.claude-sonnet-4-20250514-v1:0'
+    if model == 'claude-3.7-sonnet':
+        url = 'http://Bedroc-Proxy-xVtSm3tV6xYe-1727257641.us-east-1.elb.amazonaws.com/api/v1/chat/completions'
+        api_key = os.environ['BEDROCK_API_KEY']
+        return url, api_key, 'us.anthropic.claude-3-7-sonnet-20250219-v1:0'
     # maybe try other LLMs
-    # if provider == 'deepseek':
+    # if model == 'deepseek':
     #     url = 'https://api.deepseek.com/chat/completions'
     #     api_key = ''        
     #     return url, api_key,'deepseek-chat'
-    # if provider == 'openai':
+    # if model == 'openai':
     #     url = 'https://api.openai.com/v1/responses'
     #     api_key = ''        
     #     return url, api_key, 'gpt-4.1-mini-2025-04-14'
 
-def call_model(system_prompt, prompt, messages=None, output_format=None, tools=None, provider='google'):
+def call_model(system_prompt, prompt, messages=None, output_format=None, tools=None, model='gemini-2.5-flash'):
 
-    url, api_key, model = get_api_info(provider)
+    url, api_key, model = get_api_info(model)
 
     data = {
         "model": model,
@@ -327,7 +339,7 @@ def generate_lesson_content(prompt,lesson_section):
         Make sure to just output the lesson content, no additional niceties or metadata.
     """
     try:
-        model_output = call_model(system_prompt, prompt)
+        model_output = call_model(system_prompt, prompt,model='claude-4-sonnet')
         if model_output and 'content' in model_output:
             lesson_gen_output = model_output['content']
             lesson_sections[lesson_section] = lesson_gen_output
@@ -357,7 +369,7 @@ def assess_lesson_content(system_prompt):
         "required": ["approved", "feedback"]
     }
     
-    model_output = call_model(system_prompt, json.dumps(lesson_sections))
+    model_output = call_model(system_prompt, json.dumps(lesson_sections),model='gemini-2.5-pro')
     if model_output:
         return model_output
     else:

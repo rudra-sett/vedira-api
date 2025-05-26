@@ -28,6 +28,7 @@ class Functions(Construct): # Changed from Stack to Construct
             timeout=Duration.minutes(15),
             environment={
                 "API_KEY": os.environ.get("API_KEY", ""),
+                "BEDROCK_API_KEY": os.environ.get("BEDROCK_API_KEY", ""),
                 "COURSE_TABLE_NAME": course_table.table_name
             }
         )
@@ -81,6 +82,7 @@ class Functions(Construct): # Changed from Stack to Construct
             timeout=Duration.minutes(15),
             environment={
                 "API_KEY": os.environ.get("API_KEY", ""),
+                "BEDROCK_API_KEY": os.environ.get("BEDROCK_API_KEY", ""),
                 "LESSON_BUCKET_NAME": lesson_bucket.bucket_name
             }
         )

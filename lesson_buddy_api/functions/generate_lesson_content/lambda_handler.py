@@ -27,14 +27,12 @@ def lambda_handler(event, context):
     
     lesson_content = main_agent(course_plan, lesson_data, chapter_info)
 
-    final_lesson = "\n".join(lesson_content.values())
-
     # save to s3
     s3 = boto3.client('s3')
     bucket_name = os.environ.get('LESSON_BUCKET_NAME')
     if not bucket_name:
         raise ValueError("LESSON_BUCKET_NAME environment variable not set.")
-    s3.put_object(Bucket=bucket_name, Key=f"{course_plan['CourseID']}-{chapter_id}-{lesson_id}.md", Body=final_lesson)
+    s3.put_object(Bucket=bucket_name, Key=f"{course_plan['CourseID']}-{chapter_id}-{lesson_id}.json", Body=json.dumps(lesson_content))
     
     return {
         "chapter_id" : chapter_id,
@@ -63,12 +61,17 @@ def call_model(system_prompt, prompt, messages=None, output_format=None, tools=N
 
     data = {
         "model": model,
-        "messages": [{"role": "system", "content": system_prompt}],
+        "messages": [], # Initialize as empty
         "max_tokens": 8192
     }
 
-    if messages:
-        data['messages'].extend(messages)
+    # Add system prompt first
+    data['messages'].append({"role": "system", "content": system_prompt})
+
+    if messages is not None:
+        data['messages'].extend(messages) # Add previous messages
+    
+    # Add current user prompt
     data['messages'].append({"role": "user", "content": prompt})
     
     if output_format:
@@ -127,11 +130,11 @@ def call_model(system_prompt, prompt, messages=None, output_format=None, tools=N
                 print(f"Error: {e}")
                 return None
 
-lesson_chunks = {}
+lesson_sections = {}
 generation_counts = {}
 
 def main_agent(course_plan, lesson_data, chapter_info):
-    global lesson_chunks
+    global lesson_sections
     global generation_counts
     # main agentic loop
     # it is instructed to create a list of requirements of the topic
@@ -142,7 +145,7 @@ def main_agent(course_plan, lesson_data, chapter_info):
     # the main agent will repeat this process until the course plan is complete
     # the main agent will return the course plan    
 
-
+    current_sections_str = '\n'.join(lesson_sections.keys())
     system_prompt = f'''
     You are a world-class teacher who is responsible for creating a lesson for a student.
     You will be given a course plan, and a specific lesson topic.
@@ -163,22 +166,22 @@ def main_agent(course_plan, lesson_data, chapter_info):
 
     Essentially, this is your full procedure:
 
-    1. Determine the requirements of the lesson topic in context of the full course. Structure this as a set of "chunks" that represent individual parts of the lesson.
+    1. Determine the requirements of the lesson topic in context of the full course. Structure this as a set of "sections" that represent individual parts of the lesson.
     2. Based on those requirements, use the generate_lesson_content tool to generate each portion of the lesson.
     3. Request an assessment from the assessor agent by prompting it to assess the lesson based on your requirements.
     4. The assessor will give you an evaluation. 
-    5. If the assessor believes the lesson chunk does not meet your requirements, ask the content generator to re-create the lesson chunk based on feedback from the assessor.
-    6. Repeat this until you have a full, COMPLETE lesson (not just one chunk) approved by the assessor. PLEASE avoid generating and re-assessing content repeatedly. You shouldn't stay on the same chunk for more than 3-4 iterations.
+    5. If the assessor believes the lesson section does not meet your requirements, ask the content generator to re-create the lesson section based on feedback from the assessor.
+    6. Repeat this until you have a full, COMPLETE lesson (not just one section) approved by the assessor. PLEASE avoid generating and re-assessing content repeatedly. You shouldn't stay on the same section for more than 3-4 iterations.
 
     The course the lesson is a part of is called {course_plan['title']}. The description of the course is {course_plan['description']}.
     The chapter the lesson is a part of is called {chapter_info['title']}, which is described as "{chapter_info['description']}."
     
     Here is the information on the lesson you are creating and curating content for: {lesson_data}. Ensure all aspects of the lesson are addressed.    
-    The current lesson chunks, if any, are: 
-    {'\n'.join(lesson_chunks.keys())}
+    The current lesson sections, if any, are: 
+    {current_sections_str}
     Only complete the lesson generation after ALL aspects and portions of the lesson are completed.
 
-    This is the number of times each lesson chunk has been re-written. Please do not exceed 3 re-writes.
+    This is the number of times each lesson section has been re-written. Please do not exceed 3 re-writes.
 
     {json.dumps(generation_counts)}
 
@@ -197,12 +200,12 @@ def main_agent(course_plan, lesson_data, chapter_info):
                     "type": "string",
                     "description": "The instructions to provide the LLM to generate lesson content.",
                 },
-                "lesson_chunk": {
+                "lesson_section": {
                     "type": "string",
-                    "description": "The ID/key of this particular lesson chunk",
+                    "description": "The ID/key of this particular lesson section",
                 },                
                 },
-                "required": ["prompt","lesson_chunk"],
+                "required": ["prompt","lesson_section"],
             },
             }
         },
@@ -227,7 +230,7 @@ def main_agent(course_plan, lesson_data, chapter_info):
         #     "type": "function",
         #     "function": {
         #     "name": "complete_lesson_generation",
-        #     "description": "If the assessor LLM tells you the all lesson content and chunks are good, you will call this function to submit the lesson content. Use this ONLY when ALL lesson chunks are finalized to satisfaction.",
+        #     "description": "If the assessor LLM tells you the all lesson content and sections are good, you will call this function to submit the lesson content. Use this ONLY when ALL lesson sections are finalized to satisfaction.",
         #     "parameters": {
         #         "type": "object",
         #         "properties": {
@@ -256,7 +259,7 @@ def main_agent(course_plan, lesson_data, chapter_info):
         if output is None:
             print("Error: call_model returned None in main_agent. Aborting.")
             # Potentially return an error state or raise an exception
-            return lesson_chunks # Or an empty dict, or handle error appropriately
+            return lesson_sections # Or an empty dict, or handle error appropriately
 
         messages.append(output)
         tool_result = None # Initialize tool_result
@@ -290,11 +293,11 @@ def main_agent(course_plan, lesson_data, chapter_info):
                     })
         else:
             completed = True            
-    return lesson_chunks
+    return lesson_sections
 
 
-def generate_lesson_content(prompt,lesson_chunk):
-    global lesson_chunks
+def generate_lesson_content(prompt,lesson_section):
+    global lesson_sections
     global generation_counts
 
     lesson_content_schema = {
@@ -304,12 +307,12 @@ def generate_lesson_content(prompt,lesson_chunk):
                 "type": "string",
                 "description": "The lesson content"
             },
-            # "lesson_chunk": {
+            # "lesson_section": {
             #     "type": "string",
-            #     "description": "The identifier for the lesson chunk. This will be provided by the user."
+            #     "description": "The identifier for the lesson section. This will be provided by the user."
             # }
         },
-        "required": ["lesson_content"]#, "lesson_chunk"]
+        "required": ["lesson_content"]#, "lesson_section"]
     }
     
     system_prompt = f"""
@@ -318,7 +321,7 @@ def generate_lesson_content(prompt,lesson_chunk):
         this is the existing section of that lesson: 
 
         ```
-        {lesson_chunks.get(lesson_chunk, '')}
+        {lesson_sections.get(lesson_section, '')}
         ```
 
         Make sure to just output the lesson content, no additional niceties or metadata.
@@ -327,18 +330,18 @@ def generate_lesson_content(prompt,lesson_chunk):
         model_output = call_model(system_prompt, prompt)
         if model_output and 'content' in model_output:
             lesson_gen_output = model_output['content']
-            lesson_chunks[lesson_chunk] = lesson_gen_output
-            generation_counts[lesson_chunk] = generation_counts.get(lesson_chunk, 0) + 1
-            return f"Sucessfully generated content for chunk {lesson_chunk} and saved it, please call the assessor. The total word count of the lesson is {len(' '.join(lesson_chunks.values()))}"
+            lesson_sections[lesson_section] = lesson_gen_output
+            generation_counts[lesson_section] = generation_counts.get(lesson_section, 0) + 1
+            return f"Sucessfully generated content for section {lesson_section} and saved it, please call the assessor. The total word count of the lesson is {len(' '.join(lesson_sections.values()))}"
         else:
-            print(f"Error: call_model did not return expected output for chunk {lesson_chunk}")
-            return f"Error generating content for chunk {lesson_chunk}: No content from model."
+            print(f"Error: call_model did not return expected output for section {lesson_section}")
+            return f"Error generating content for section {lesson_section}: No content from model."
     except Exception as e:
         print(e)
         return f"Error generating lesson content: {e}"
 
 def assess_lesson_content(system_prompt):   
-    global lesson_chunks
+    global lesson_sections
     lesson_assessment_schema = {
         "type": "object",
         "properties": {            
@@ -354,7 +357,7 @@ def assess_lesson_content(system_prompt):
         "required": ["approved", "feedback"]
     }
     
-    model_output = call_model(system_prompt, json.dumps(lesson_chunks))
+    model_output = call_model(system_prompt, json.dumps(lesson_sections))
     if model_output:
         return model_output
     else:

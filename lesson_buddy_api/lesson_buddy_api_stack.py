@@ -34,5 +34,6 @@ class LessonBuddyApiStack(Stack):
             generate_course_plan_function=functions.generate_course_plan_function,
             get_course_list_function=functions.get_all_courses_function,
             get_lesson_content_function=functions.get_lesson_content_function,
-            get_lesson_plan_function=functions.get_course_plan_function
+            get_lesson_plan_function=functions.get_course_plan_function,
+            check_chapter_generation_status_function=functions.check_chapter_generation_status_function
         )

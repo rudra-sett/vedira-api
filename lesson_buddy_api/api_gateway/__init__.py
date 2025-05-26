@@ -14,6 +14,7 @@ class LessonBuddyApiGateway(Construct):
                  get_course_list_function: _lambda.IFunction,
                  get_lesson_content_function: _lambda.IFunction,
                  get_lesson_plan_function: _lambda.IFunction,
+                 check_chapter_generation_status_function: _lambda.IFunction, # Added new function
                  **kwargs) -> None:
         super().__init__(scope, id, **kwargs)
 
@@ -81,7 +82,21 @@ class LessonBuddyApiGateway(Construct):
         get_course_list_integration = apigw.LambdaIntegration(get_course_list_function)
         get_lesson_content_integration = apigw.LambdaIntegration(get_lesson_content_function)
         get_lesson_plan_integration = apigw.LambdaIntegration(get_lesson_plan_function)
-
+        check_chapter_generation_status_integration = apigw.LambdaIntegration(
+            check_chapter_generation_status_function,
+            request_templates={
+                "application/json": json.dumps({
+                    "executionArn": "$input.params('executionArn')"
+                })
+            },
+            # Ensure the integration passes the query string parameter
+            # to the Lambda function as part of the event.
+            # API Gateway maps query string parameters to event.queryStringParameters by default for Lambda proxy.
+            # For non-proxy, explicit mapping is needed if not directly in the body.
+            # The lambda handler expects 'executionArn' in the event root.
+            # We can achieve this by mapping it in the request_template.
+        )
+        
         # Define resources and methods based on the image
 
         # /generate-chapter
@@ -112,5 +127,16 @@ class LessonBuddyApiGateway(Construct):
         # /get-lesson-plan
         get_lesson_plan_resource = api.root.add_resource("get-course-plan")
         get_lesson_plan_resource.add_method("GET", get_lesson_plan_integration)
+
+        # /check-chapter-generation-status
+        check_chapter_status_resource = api.root.add_resource("check-chapter-generation-status")
+        check_chapter_status_resource.add_method(
+            "GET", 
+            check_chapter_generation_status_integration,
+            request_parameters={
+                "method.request.querystring.executionArn": True # Mark executionArn as required
+            },
+            method_responses=[apigw.MethodResponse(status_code="200")] # Define expected method response
+        )
 
         self.api = api

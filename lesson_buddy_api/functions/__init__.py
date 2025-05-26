@@ -99,6 +99,23 @@ class Functions(Construct): # Changed from Stack to Construct
         )
         course_table.grant_write_data(self.mark_lesson_generated_function)
 
+        # Add function to the stack from folder check_chapter_generation_status
+        self.check_chapter_generation_status_function = _lambda.Function(
+            self, "CheckChapterGenerationStatusFunction",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            handler="lambda_handler.handler",  # Corrected handler name
+            code=_lambda.Code.from_asset("lesson_buddy_api/functions/check_chapter_generation_status"),
+            timeout=Duration.minutes(1), # Short timeout as it's a status check
+            environment={
+                # No specific environment variables needed for this function yet
+            }
+        )
+        # Grant permission to describe Step Function executions
+        self.check_chapter_generation_status_function.add_to_role_policy(iam.PolicyStatement(
+            actions=["states:DescribeExecution"],
+            resources=["*"] # Or be more specific if you have the ARN of the state machine
+        ))
+
         step_function_definition = {
         "Comment": "A description of my state machine",
         "StartAt": "Get Course Plan",

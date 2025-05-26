@@ -82,11 +82,7 @@ class LessonBuddyApiGateway(Construct):
         get_course_list_integration = apigw.LambdaIntegration(get_course_list_function)
         get_lesson_content_integration = apigw.LambdaIntegration(get_lesson_content_function)
         get_lesson_plan_integration = apigw.LambdaIntegration(get_lesson_plan_function)
-        check_chapter_generation_status_integration = apigw.LambdaIntegration(
-            check_chapter_generation_status_function
-            # Removed request_templates to use default Lambda proxy integration behavior.
-            # The Lambda handler is now updated to expect executionArn from event.queryStringParameters.
-        )
+        check_chapter_generation_status_integration = apigw.LambdaIntegration(check_chapter_generation_status_function)
         
         # Define resources and methods based on the image
 
@@ -121,13 +117,6 @@ class LessonBuddyApiGateway(Construct):
 
         # /check-chapter-generation-status
         check_chapter_status_resource = api.root.add_resource("check-chapter-generation-status")
-        check_chapter_status_resource.add_method(
-            "GET", 
-            check_chapter_generation_status_integration,
-            request_parameters={
-                "method.request.querystring.executionArn": True # Mark executionArn as required
-            },
-            method_responses=[apigw.MethodResponse(status_code="200")] # Define expected method response
-        )
+        check_chapter_status_resource.add_method("GET", check_chapter_generation_status_integration)
 
         self.api = api

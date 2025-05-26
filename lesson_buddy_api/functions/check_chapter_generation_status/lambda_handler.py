@@ -9,11 +9,14 @@ def handler(event, context):
     Checks the status of a Step Functions execution.
     """
     try:
-        execution_arn = event.get('executionArn')
+        # For Lambda proxy integration, query string parameters are in event['queryStringParameters']
+        query_params = event.get('queryStringParameters', {})
+        execution_arn = query_params.get('executionArn') if query_params else None # Ensure query_params is not None
+
         if not execution_arn:
             return {
                 'statusCode': 400,
-                'body': json.dumps({'error': 'executionArn is required'})
+                'body': json.dumps({'error': 'executionArn query string parameter is required'})
             }
 
         response = sfn_client.describe_execution(

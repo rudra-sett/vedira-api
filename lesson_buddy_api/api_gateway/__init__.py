@@ -83,18 +83,9 @@ class LessonBuddyApiGateway(Construct):
         get_lesson_content_integration = apigw.LambdaIntegration(get_lesson_content_function)
         get_lesson_plan_integration = apigw.LambdaIntegration(get_lesson_plan_function)
         check_chapter_generation_status_integration = apigw.LambdaIntegration(
-            check_chapter_generation_status_function,
-            request_templates={
-                "application/json": json.dumps({
-                    "executionArn": "$input.params('executionArn')"
-                })
-            },
-            # Ensure the integration passes the query string parameter
-            # to the Lambda function as part of the event.
-            # API Gateway maps query string parameters to event.queryStringParameters by default for Lambda proxy.
-            # For non-proxy, explicit mapping is needed if not directly in the body.
-            # The lambda handler expects 'executionArn' in the event root.
-            # We can achieve this by mapping it in the request_template.
+            check_chapter_generation_status_function
+            # Removed request_templates to use default Lambda proxy integration behavior.
+            # The Lambda handler is now updated to expect executionArn from event.queryStringParameters.
         )
         
         # Define resources and methods based on the image

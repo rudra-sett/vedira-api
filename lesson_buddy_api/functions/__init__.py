@@ -178,6 +178,26 @@ class Functions(Construct): # Changed from Stack to Construct
         #     resources=[user_pool_arn]
         # ))
 
+        self.auth_verify_code_function = _lambda.Function(
+            self, "AuthVerifyCodeFunction",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            handler="lambda_handler.lambda_handler", # Assuming handler is lambda_handler.lambda_handler
+            code=_lambda.Code.from_asset("lesson_buddy_api/functions/auth_verify_code"),
+            timeout=Duration.seconds(30),
+            environment={
+                "USER_POOL_ID": user_pool_id,
+                "USER_POOL_CLIENT_ID": user_pool_client_id, # Changed from CLIENT_ID to USER_POOL_CLIENT_ID for consistency
+                "USERS_TABLE_NAME": course_table.table_name # Assuming you might want to update a user status table
+            }
+        )
+        # Grant permissions to confirm sign-up in Cognito
+        self.auth_verify_code_function.add_to_role_policy(iam.PolicyStatement(
+            actions=["cognito-idp:ConfirmSignUp"],
+            resources=[user_pool_arn] # Restrict to the specific user pool
+        ))
+        # If you update a DynamoDB table (e.g., users_table) after verification:
+        # course_table.grant_write_data(self.auth_verify_code_function) # Or a specific users_table if different
+
 
         step_function_definition = {
         "Comment": "A description of my state machine",

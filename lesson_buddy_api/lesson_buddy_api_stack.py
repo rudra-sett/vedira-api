@@ -49,5 +49,6 @@ class LessonBuddyApiStack(Stack):
             get_user_info_function=functions.get_user_info_function,
             # Server-side auth flow functions
             auth_signup_function=functions.auth_signup_function,
-            auth_signin_function=functions.auth_signin_function
+            auth_signin_function=functions.auth_signin_function,
+            auth_verify_code_function=functions.auth_verify_code_function # Added this line
         )

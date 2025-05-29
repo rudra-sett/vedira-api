@@ -23,6 +23,7 @@ class LessonBuddyApiGateway(Construct):
                  # Server-side auth flow functions
                  auth_signup_function: _lambda.Function, # Added
                  auth_signin_function: _lambda.Function, # Added
+                 auth_verify_code_function: _lambda.Function, # Added
                  **kwargs) -> None:
         super().__init__(scope, id, **kwargs)
 
@@ -142,6 +143,11 @@ class LessonBuddyApiGateway(Construct):
         auth_signin_integration = apigw.LambdaIntegration(auth_signin_function)
         signin_resource = auth_resource.add_resource("signin")
         signin_resource.add_method("POST", auth_signin_integration) # No authorizer
+
+        # POST /auth/verify-code
+        auth_verify_code_integration = apigw.LambdaIntegration(auth_verify_code_function)
+        verify_code_resource = auth_resource.add_resource("verify-code")
+        verify_code_resource.add_method("POST", auth_verify_code_integration) # No authorizer
         
         # GET /auth/userinfo (Protected by Cognito Authorizer)
         get_user_info_integration = apigw.LambdaIntegration(get_user_info_function)

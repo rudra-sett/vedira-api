@@ -20,10 +20,17 @@ class LessonBuddyApiStack(Stack):
         buckets = Buckets(self, "Buckets")
 
         # Add the FunctionStack and AuthenticationStack to the main stack
-        # Pass the table and bucket to the FunctionStack
-        functions = Functions(self, "Functions", course_table=tables.table, lesson_bucket=buckets.bucket)
         authentication = Authentication(self, "Authentication")
-
+        # Pass the table, bucket, and Cognito details to the FunctionStack
+        functions = Functions(
+            self, "Functions", 
+            course_table=tables.table, 
+            lesson_bucket=buckets.bucket,
+            user_pool_id=authentication.user_pool.user_pool_id,
+            user_pool_client_id=authentication.user_pool_client.user_pool_client_id,
+            user_pool_arn=authentication.user_pool.user_pool_arn
+        )
+        
         # Add the API Gateway Stack
         # Ensure FunctionStack exposes these attributes:
         # generate_course_plan_sfn, generate_lesson_content_lambda,
@@ -35,5 +42,12 @@ class LessonBuddyApiStack(Stack):
             get_course_list_function=functions.get_all_courses_function,
             get_lesson_content_function=functions.get_lesson_content_function,
             get_lesson_plan_function=functions.get_course_plan_function,
-            check_chapter_generation_status_function=functions.check_chapter_generation_status_function
+            check_chapter_generation_status_function=functions.check_chapter_generation_status_function,
+            # Authentication related parameters
+            cognito_authorizer=authentication.authorizer,
+            user_pool_client=authentication.user_pool_client, 
+            get_user_info_function=functions.get_user_info_function,
+            # Server-side auth flow functions
+            auth_signup_function=functions.auth_signup_function,
+            auth_signin_function=functions.auth_signin_function
         )

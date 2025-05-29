@@ -14,7 +14,13 @@ import json
 
 class Functions(Construct): # Changed from Stack to Construct
 
-    def __init__(self, scope: Construct, construct_id: str, course_table: dynamodb.ITable, lesson_bucket: s3.IBucket, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, 
+                 course_table: dynamodb.ITable, 
+                 lesson_bucket: s3.IBucket,
+                 user_pool_id: str, # Added
+                 user_pool_client_id: str, # Added
+                 user_pool_arn: str, # Added for IAM permissions
+                 **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
         
         load_dotenv() # Ensure .env is loaded for API_KEY
@@ -117,6 +123,61 @@ class Functions(Construct): # Changed from Stack to Construct
             actions=["states:DescribeExecution"],
             resources=["*"] # Or be more specific if you have the ARN of the state machine
         ))
+
+        # Add function for retrieving user info (protected by Cognito)
+        self.get_user_info_function = _lambda.Function(
+            self, "GetUserInfoFunction",
+            runtime=_lambda.Runtime.PYTHON_3_13, # Match other functions
+            handler="lambda_handler.handler",
+            code=_lambda.Code.from_asset("lesson_buddy_api/functions/get_user_info"),
+            timeout=Duration.seconds(30), # Typically short
+            environment={
+                # No specific environment variables needed for this function yet
+            }
+        )
+        # No specific table/bucket permissions needed for this simple example
+
+
+        # --- Server-side Authentication Lambda Functions ---
+
+        self.auth_signup_function = _lambda.Function(
+            self, "AuthSignupFunction",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            handler="lambda_handler.handler",
+            code=_lambda.Code.from_asset("lesson_buddy_api/functions/auth_signup"),
+            timeout=Duration.seconds(30),
+            environment={
+                "USER_POOL_ID": user_pool_id,
+                "CLIENT_ID": user_pool_client_id
+            }
+        )
+        # Grant permissions to interact with Cognito User Pool
+        self.auth_signup_function.add_to_role_policy(iam.PolicyStatement(
+            actions=["cognito-idp:SignUp"],
+            resources=[user_pool_arn] # Restrict to the specific user pool
+        ))
+
+        self.auth_signin_function = _lambda.Function(
+            self, "AuthSigninFunction",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            handler="lambda_handler.handler",
+            code=_lambda.Code.from_asset("lesson_buddy_api/functions/auth_signin"),
+            timeout=Duration.seconds(30),
+            environment={
+                "USER_POOL_ID": user_pool_id,
+                "CLIENT_ID": user_pool_client_id
+            }
+        )
+        self.auth_signin_function.add_to_role_policy(iam.PolicyStatement(
+            actions=["cognito-idp:InitiateAuth", "cognito-idp:RespondToAuthChallenge"], # RespondToAuthChallenge might be needed
+            resources=[user_pool_arn] # Restrict to the specific user pool
+        ))
+        # If client-specific secrets are used with USER_PASSWORD_AUTH (not typical for public clients but possible for confidential):
+        # self.auth_signin_function.add_to_role_policy(iam.PolicyStatement(
+        #     actions=["cognito-idp:AdminInitiateAuth"], # If using Admin flow
+        #     resources=[user_pool_arn]
+        # ))
+
 
         step_function_definition = {
         "Comment": "A description of my state machine",

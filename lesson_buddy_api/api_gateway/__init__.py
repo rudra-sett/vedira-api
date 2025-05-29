@@ -2,7 +2,8 @@ from aws_cdk import (
     aws_apigateway as apigw,
     aws_lambda as _lambda,
     aws_stepfunctions as sfn,
-    aws_iam as iam # Added for potential Step Functions role if needed for sync
+    aws_iam as iam, # Added for potential Step Functions role if needed for sync
+    aws_cognito as cognito # Added for Cognito types
 )
 from constructs import Construct
 import json
@@ -10,11 +11,18 @@ import json
 class LessonBuddyApiGateway(Construct):
     def __init__(self, scope: Construct, id: str,
                  generate_chapter_sfn: sfn.IStateMachine,
-                 generate_course_plan_function: _lambda.IFunction,
-                 get_course_list_function: _lambda.IFunction,
-                 get_lesson_content_function: _lambda.IFunction,
-                 get_lesson_plan_function: _lambda.IFunction,
-                 check_chapter_generation_status_function: _lambda.IFunction, # Added new function
+                 generate_course_plan_function: _lambda.Function,
+                 get_course_list_function: _lambda.Function,
+                 get_lesson_content_function: _lambda.Function,
+                 get_lesson_plan_function: _lambda.Function,
+                 check_chapter_generation_status_function: _lambda.Function, # Added new function
+                 # Authentication parameters
+                 cognito_authorizer: apigw.CognitoUserPoolsAuthorizer,
+                 user_pool_client: cognito.UserPoolClient, 
+                 get_user_info_function: _lambda.Function,
+                 # Server-side auth flow functions
+                 auth_signup_function: _lambda.Function, # Added
+                 auth_signin_function: _lambda.Function, # Added
                  **kwargs) -> None:
         super().__init__(scope, id, **kwargs)
 
@@ -118,5 +126,31 @@ class LessonBuddyApiGateway(Construct):
         # /check-chapter-generation-status
         check_chapter_status_resource = api.root.add_resource("check-chapter-generation-status")
         check_chapter_status_resource.add_method("GET", check_chapter_generation_status_integration)
+
+        # --- Authentication Endpoints ---
+        # The /auth/login, /auth/callback, /auth/logout endpoints are removed
+        # as they were tied to the Cognito Hosted UI flow (domain).
+
+        auth_resource = api.root.add_resource("auth")
+
+        # POST /auth/signup
+        auth_signup_integration = apigw.LambdaIntegration(auth_signup_function)
+        signup_resource = auth_resource.add_resource("signup")
+        signup_resource.add_method("POST", auth_signup_integration) # No authorizer
+
+        # POST /auth/signin
+        auth_signin_integration = apigw.LambdaIntegration(auth_signin_function)
+        signin_resource = auth_resource.add_resource("signin")
+        signin_resource.add_method("POST", auth_signin_integration) # No authorizer
+        
+        # GET /auth/userinfo (Protected by Cognito Authorizer)
+        get_user_info_integration = apigw.LambdaIntegration(get_user_info_function)
+        userinfo_resource = auth_resource.add_resource("userinfo")
+        userinfo_resource.add_method(
+            "GET",
+            get_user_info_integration,
+            authorizer=cognito_authorizer,
+            authorization_type=apigw.AuthorizationType.COGNITO
+        )
 
         self.api = api

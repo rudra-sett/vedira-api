@@ -198,6 +198,25 @@ class Functions(Construct): # Changed from Stack to Construct
         # If you update a DynamoDB table (e.g., users_table) after verification:
         # course_table.grant_write_data(self.auth_verify_code_function) # Or a specific users_table if different
 
+        self.auth_resend_verification_code_function = _lambda.Function(
+            self, "AuthResendVerificationCodeFunction",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            handler="lambda_handler.lambda_handler",
+            code=_lambda.Code.from_asset("lesson_buddy_api/functions/auth_resend_verification_code"),
+            timeout=Duration.seconds(30),
+            environment={
+                "USER_POOL_ID": user_pool_id,
+                "USER_POOL_CLIENT_ID": user_pool_client_id,
+            }
+        )
+        # Grant permissions to resend confirmation code and get user details in Cognito
+        self.auth_resend_verification_code_function.add_to_role_policy(iam.PolicyStatement(
+            actions=[
+                "cognito-idp:ResendConfirmationCode",
+                "cognito-idp:AdminGetUser" # Needed to check if user is already confirmed
+            ],
+            resources=[user_pool_arn] # Restrict to the specific user pool
+        ))
 
         step_function_definition = {
         "Comment": "A description of my state machine",

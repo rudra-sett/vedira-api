@@ -21,7 +21,7 @@ class Authentication(Construct):
             ),
             auto_verify=cognito.AutoVerifiedAttrs(
                 email=True,
-                phone=True
+                phone=False
             ),
             standard_attributes=cognito.StandardAttributes(
                 email=cognito.StandardAttribute(required=True, mutable=True),

@@ -218,6 +218,22 @@ class Functions(Construct): # Changed from Stack to Construct
             resources=[user_pool_arn] # Restrict to the specific user pool
         ))
 
+        self.auth_refresh_token_function = _lambda.Function(
+            self, "AuthRefreshTokenFunction",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            handler="lambda_handler.handler", # Assuming handler is lambda_handler.handler
+            code=_lambda.Code.from_asset("lesson_buddy_api/functions/auth_refresh_token"),
+            timeout=Duration.seconds(30),
+            environment={
+                "USER_POOL_ID": user_pool_id,
+                "CLIENT_ID": user_pool_client_id
+            }
+        )
+        self.auth_refresh_token_function.add_to_role_policy(iam.PolicyStatement(
+            actions=["cognito-idp:InitiateAuth"], # REFRESH_TOKEN_AUTH uses InitiateAuth
+            resources=[user_pool_arn]
+        ))
+
         step_function_definition = {
         "Comment": "A description of my state machine",
         "StartAt": "Get Course Plan",

@@ -25,6 +25,7 @@ class LessonBuddyApiGateway(Construct):
                  auth_signin_function: _lambda.Function, # Added
                  auth_verify_code_function: _lambda.Function, # Added
                  auth_resend_verification_code_function: _lambda.Function, # Added
+                 auth_refresh_token_function: _lambda.Function, # Added
                  **kwargs) -> None:
         super().__init__(scope, id, **kwargs)
 
@@ -154,6 +155,11 @@ class LessonBuddyApiGateway(Construct):
         auth_resend_verification_code_integration = apigw.LambdaIntegration(auth_resend_verification_code_function)
         resend_code_resource = auth_resource.add_resource("resend-verification-code")
         resend_code_resource.add_method("POST", auth_resend_verification_code_integration) # No authorizer
+
+        # POST /auth/refresh-token
+        auth_refresh_token_integration = apigw.LambdaIntegration(auth_refresh_token_function)
+        refresh_token_resource = auth_resource.add_resource("refresh-token")
+        refresh_token_resource.add_method("POST", auth_refresh_token_integration) # No authorizer
         
         # GET /auth/userinfo (Protected by Cognito Authorizer)
         get_user_info_integration = apigw.LambdaIntegration(get_user_info_function)

@@ -51,5 +51,6 @@ class LessonBuddyApiStack(Stack):
             auth_signup_function=functions.auth_signup_function,
             auth_signin_function=functions.auth_signin_function,
             auth_verify_code_function=functions.auth_verify_code_function, # Added this line
-            auth_resend_verification_code_function=functions.auth_resend_verification_code_function
+            auth_resend_verification_code_function=functions.auth_resend_verification_code_function,
+            auth_refresh_token_function=functions.auth_refresh_token_function
         )

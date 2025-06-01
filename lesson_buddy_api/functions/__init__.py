@@ -339,7 +339,7 @@ class Functions(Construct): # Changed from Stack to Construct
                     "Output": "{% $states.result.Payload %}", # Output of fix_lesson_markdown
                     "Arguments": {
                         "FunctionName": self.fix_lesson_markdown_function.function_arn,
-                        "Payload": "{% $ %}" # Pass the entire output of the previous step
+                        "Payload": "{% $states.input %}" # Pass the entire output of the previous step
                     },
                     "Retry": [
                     {

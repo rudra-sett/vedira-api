@@ -287,8 +287,8 @@ class Functions(Construct): # Changed from Stack to Construct
                 "Get Course Plan": {
                 "Type": "Task",
                 "Resource": "arn:aws:states:::lambda:invoke",
-                "OutputPath": "{% $states.result.Payload %}",
-                "Parameters": {
+                "Output": "{% $states.result.Payload %}",
+                "Arguments": {
                     "FunctionName": self.get_course_plan_function.function_arn,
                     "Payload": {
                     "queryStringParameters": {
@@ -331,8 +331,8 @@ class Functions(Construct): # Changed from Stack to Construct
                 "Mark Chapter as Generating": {
                 "Type": "Task",
                 "Resource": "arn:aws:states:::lambda:invoke",
-                "OutputPath": "{% $states.input %}",
-                "Parameters": {
+                "Output": "{% $states.input %}",
+                "Arguments": {
                     "FunctionName": self.update_chapter_status_function.function_arn,
                     "Payload": {
                     "course_id": "{% $course_id %}",
@@ -369,8 +369,8 @@ class Functions(Construct): # Changed from Stack to Construct
                     "Generate Lesson Content": {
                         "Type": "Task",
                         "Resource": "arn:aws:states:::lambda:invoke",
-                        "OutputPath": "{% $states.result.Payload %}",
-                        "Parameters": {
+                        "Output": "{% $states.result.Payload %}",
+                        "Arguments": {
                         "FunctionName": self.generate_lesson_content_function.function_arn,
                         "Payload": {
                             "body": {
@@ -399,8 +399,8 @@ class Functions(Construct): # Changed from Stack to Construct
                     "Fix Lesson Markdown": {
                         "Type": "Task",
                         "Resource": "arn:aws:states:::lambda:invoke",
-                        "OutputPath": "{% $states.result.Payload %}",
-                        "Parameters": {
+                        "Output": "{% $states.result.Payload %}",
+                        "Arguments": {
                         "FunctionName": self.fix_lesson_markdown_function.function_arn,
                         "Payload": "{% $states.input %}"
                         },
@@ -434,8 +434,8 @@ class Functions(Construct): # Changed from Stack to Construct
                         "Save Chapter State to DynamoDB": {
                         "Type": "Task",
                         "Resource": "arn:aws:states:::lambda:invoke",
-                        "OutputPath": "{% $states.result.Payload %}",
-                        "Parameters": {
+                        "Output": "{% $states.result.Payload %}",
+                        "Arguments": {
                             "FunctionName": self.update_chapter_status_function.function_arn,
                             "Payload": {
                             "course_id": "{% $course_id %}",
@@ -469,8 +469,8 @@ class Functions(Construct): # Changed from Stack to Construct
                         "Mark MCQs as Generating": {
                         "Type": "Task",
                         "Resource": "arn:aws:states:::lambda:invoke",
-                        "OutputPath": "{% $states.result.Payload %}",
-                        "Parameters": {
+                        "Output": "{% $states.result.Payload %}",
+                        "Arguments": {
                             "FunctionName": self.update_chapter_status_function.function_arn,
                             "Payload": {
                             "course_id": "{% $course_id %}",
@@ -507,8 +507,8 @@ class Functions(Construct): # Changed from Stack to Construct
                             "Generate Questions": {
                                 "Type": "Task",
                                 "Resource": "arn:aws:states:::lambda:invoke",
-                                "OutputPath": "{% $states.result.Payload %}",
-                                "Parameters": {
+                                "Output": "{% $states.result.Payload %}",
+                                "Arguments": {
                                 "FunctionName": self.generate_multiple_choice_questions_function.function_arn,
                                 "Payload": "{% $states.input %}"
                                 },
@@ -535,8 +535,8 @@ class Functions(Construct): # Changed from Stack to Construct
                         "Save MCQ State to DynamoDB": {
                         "Type": "Task",
                         "Resource": "arn:aws:states:::lambda:invoke",
-                        "OutputPath": "{% $states.result.Payload %}",
-                        "Parameters": {
+                        "Output": "{% $states.result.Payload %}",
+                        "Arguments": {
                             "FunctionName": self.update_chapter_status_function.function_arn,
                             "Payload": {
                             "course_id": "{% $course_id %}",

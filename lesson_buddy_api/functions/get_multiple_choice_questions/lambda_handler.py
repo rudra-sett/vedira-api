@@ -33,9 +33,9 @@ def lambda_handler(event, context):
         if query_params is None: # API Gateway might pass None if no query params
             query_params = {}
             
-        course_id = query_params.get("courseId")
-        chapter_id = query_params.get("chapterId")
-        lesson_id = query_params.get("lessonId")
+        course_id = query_params.get("course_id")
+        chapter_id = query_params.get("chapter_id")
+        lesson_id = query_params.get("lesson_id")
 
         if not all([course_id, chapter_id, lesson_id]):
             logger.error("Missing one or more query string parameters: courseId, chapterId, lessonId")

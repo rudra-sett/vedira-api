@@ -269,11 +269,12 @@ def main_agent(course_plan, lesson_data, chapter_info):
 
     # lesson_data = course_plan["chapters"][chapter]['lessons'][lesson]
 
-    completed = False
+    completed = False    
+    start_prompt = f"Please proceed with the lesson generation."
     messages = []
     while not completed:
         output = call_model(system_prompt,
-        prompt = f"Please proceed.",
+        prompt = start_prompt,
         messages = messages,
         model='gemini-2.0-flash-lite',
         tools=tools)
@@ -314,7 +315,17 @@ def main_agent(course_plan, lesson_data, chapter_info):
                         "tool_call_id": tool_call['id']
                     })
         else:
-            completed = True            
+            if len(lesson_sections) == 0:
+                # Let's double check one more time if the lesson is complete
+                # If the lesson is complete, we can break out of the loop
+                start_prompt = "Please check if the lesson is complete. If it is, return a message saying 'Lesson complete'. If not, continue building the lesson."
+                continue
+            else:
+                print("No tool calls found in output. Assuming lesson generation is complete.")
+                # If no tool calls, we assume the lesson is complete
+                # This might be a good place to check if the lesson is actually complete
+                # For now, we will just break out of the loop
+                completed = True            
     return lesson_sections
 
 

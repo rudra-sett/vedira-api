@@ -17,6 +17,7 @@ class Functions(Construct): # Changed from Stack to Construct
     def __init__(self, scope: Construct, construct_id: str, 
                  course_table: dynamodb.ITable, 
                  lesson_bucket: s3.IBucket,
+                 questions_bucket: s3.IBucket, # Added questions_bucket
                  user_pool_id: str, # Added
                  user_pool_client_id: str, # Added
                  user_pool_arn: str, # Added for IAM permissions
@@ -118,10 +119,24 @@ class Functions(Construct): # Changed from Stack to Construct
             timeout=Duration.minutes(5), 
             environment={
                 "API_KEY": os.environ.get("API_KEY", ""), 
-                "BEDROCK_API_KEY": os.environ.get("BEDROCK_API_KEY", ""), 
+                "BEDROCK_API_KEY": os.environ.get("BEDROCK_API_KEY", ""),
+                "QUESTIONS_BUCKET_NAME": questions_bucket.bucket_name # Added
             }
         )
-        # Note: Permissions for this function to access other services (if any) are not added here.
+        questions_bucket.grant_write(self.generate_multiple_choice_questions_function) # Added permissions
+
+        # Add function to the stack from folder get_multiple_choice_questions
+        self.get_multiple_choice_questions_function = _lambda.Function(
+            self, "GetMultipleChoiceQuestionsFunction",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            handler="lambda_handler.lambda_handler",
+            code=_lambda.Code.from_asset("lesson_buddy_api/functions/get_multiple_choice_questions"),
+            timeout=Duration.minutes(1),
+            environment={
+                "QUESTIONS_BUCKET_NAME": questions_bucket.bucket_name
+            }
+        )
+        questions_bucket.grant_read(self.get_multiple_choice_questions_function)
 
         # Add function to the stack from folder mark_lesson_generated
         self.mark_lesson_generated_function = _lambda.Function(

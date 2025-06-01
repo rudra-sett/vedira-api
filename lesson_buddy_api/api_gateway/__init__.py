@@ -26,6 +26,7 @@ class LessonBuddyApiGateway(Construct):
                  auth_verify_code_function: _lambda.Function, # Added
                  auth_resend_verification_code_function: _lambda.Function, # Added
                  auth_refresh_token_function: _lambda.Function, # Added
+                 get_multiple_choice_questions_function: _lambda.Function, # Added for new endpoint
                  **kwargs) -> None:
         super().__init__(scope, id, **kwargs)
 
@@ -94,6 +95,7 @@ class LessonBuddyApiGateway(Construct):
         get_lesson_content_integration = apigw.LambdaIntegration(get_lesson_content_function)
         get_lesson_plan_integration = apigw.LambdaIntegration(get_lesson_plan_function)
         check_chapter_generation_status_integration = apigw.LambdaIntegration(check_chapter_generation_status_function)
+        get_multiple_choice_questions_integration = apigw.LambdaIntegration(get_multiple_choice_questions_function) # Added
         
         # Define resources and methods based on the image
 
@@ -169,6 +171,18 @@ class LessonBuddyApiGateway(Construct):
             get_user_info_integration,
             authorizer=cognito_authorizer,
             authorization_type=apigw.AuthorizationType.COGNITO
+        )
+
+        # GET /questions (Protected by Cognito Authorizer, expects query params)
+        questions_resource = api.root.add_resource("questions")
+        questions_resource.add_method(
+            "GET",
+            get_multiple_choice_questions_integration,            
+            request_parameters={
+                "method.request.querystring.courseId": True,
+                "method.request.querystring.chapterId": True,
+                "method.request.querystring.lessonId": True
+            }
         )
 
         self.api = api

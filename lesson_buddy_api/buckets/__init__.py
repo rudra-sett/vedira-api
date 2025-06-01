@@ -14,3 +14,10 @@ class Buckets(Construct):
             removal_policy=RemovalPolicy.DESTROY,
             auto_delete_objects=True
         )
+
+        self.questions_bucket = s3.Bucket(
+            self, "MultipleChoiceQuestionsS3Bucket",
+            # bucket_name="multiple-choice-questions-bucket", # Consider a unique name if needed
+            removal_policy=RemovalPolicy.DESTROY, # Or RETAIN depending on data persistence needs
+            auto_delete_objects=True # Set to False if you want to retain objects on stack deletion
+        )

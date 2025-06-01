@@ -26,6 +26,7 @@ class LessonBuddyApiStack(Stack):
             self, "Functions", 
             course_table=tables.table, 
             lesson_bucket=buckets.bucket,
+            questions_bucket=buckets.questions_bucket, # Added questions_bucket
             user_pool_id=authentication.user_pool.user_pool_id,
             user_pool_client_id=authentication.user_pool_client.user_pool_client_id,
             user_pool_arn=authentication.user_pool.user_pool_arn
@@ -52,5 +53,6 @@ class LessonBuddyApiStack(Stack):
             auth_signin_function=functions.auth_signin_function,
             auth_verify_code_function=functions.auth_verify_code_function, # Added this line
             auth_resend_verification_code_function=functions.auth_resend_verification_code_function,
-            auth_refresh_token_function=functions.auth_refresh_token_function
+            auth_refresh_token_function=functions.auth_refresh_token_function,
+            get_multiple_choice_questions_function=functions.get_multiple_choice_questions_function # Added
         )

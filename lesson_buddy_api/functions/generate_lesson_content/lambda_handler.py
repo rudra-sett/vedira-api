@@ -189,9 +189,9 @@ def main_agent(course_plan, lesson_data, chapter_info):
 
     1. Determine the requirements of the lesson topic in context of the full course. Structure this as a set of "sections" that represent individual parts of the lesson. Each section must have a unique numeric ID (e.g., "1", "2", "3") to ensure the sections stay in the correct order.
     2. Based on those requirements, use the generate_lesson_content tool to generate each portion of the lesson.
-    3. Request an assessment from the assessor agent by prompting it to assess the lesson based on your requirements.
+    3. Request an assessment of the sections using the assess_lesson_content tool by prompting it to assess the lesson based on your requirements.
     4. The assessor will give you an evaluation. 
-    5. If the assessor believes the lesson section does not meet your requirements, ask the content generator to re-create the lesson section based on feedback from the assessor.
+    5. If the assessor believes a lesson section does not meet your requirements, ask the content generator to re-create the lesson section based on feedback from the assessor.
     6. Repeat this until you have a full, COMPLETE lesson (not just one section) approved by the assessor. PLEASE avoid generating and re-assessing content repeatedly. You shouldn't stay on the same section for more than 3-4 iterations.
 
     The course the lesson is a part of is called {course_plan['title']}. The description of the course is {course_plan['description']}.
@@ -280,7 +280,7 @@ def main_agent(course_plan, lesson_data, chapter_info):
         tools=tools)
         
         # fix prompt in case it was changed by empty dict
-        start_prompt = f"Please proceed with the lesson generation."
+        # start_prompt = f"Please proceed with the lesson generation."
 
         if output is None:
             print("Error: call_model returned None in main_agent. Aborting.")
@@ -322,7 +322,7 @@ def main_agent(course_plan, lesson_data, chapter_info):
             if len(lesson_sections) == 0:
                 # Let's double check one more time if the lesson is complete
                 # If the lesson is complete, we can break out of the loop
-                start_prompt = "Please check if the lesson is complete. If it is, return a message saying 'Lesson complete'. If not, continue building the lesson."
+                # start_prompt = ""
                 continue
             else:
                 print("No tool calls found in output. Assuming lesson generation is complete.")

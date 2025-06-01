@@ -122,8 +122,8 @@ code blocks (e.g., ``` ```), inline code (e.g., ` `), blockquotes (e.g., >), and
 are correctly formatted according to standard markdown syntax.
 Return only the corrected markdown text, without any additional explanations or commentary.
 If the markdown is already correct, return the original text.
-If the provided text appears to be a section of a larger document and does not begin with a markdown header (e.g., #, ##, ###), please add an appropriate H2 header (e.g., "## Section Title") at the beginning of the text. Infer a suitable title from the content if one is not obvious.
-Do not add new content or remove existing content, only fix the markdown syntax and ensure a header exists.
+If the provided text appears to be a section of a larger document and does not begin with a markdown header (e.g., #, ##, ###), please add an appropriate H2 header (e.g., "## Section Title") at the beginning of the text. Infer a suitable title from the content if one is not obvious. Make sure not to include the section number in the header.
+Do not add new content or remove existing content, only fix the markdown syntax and ensure a header exists. If there is an H1 header, please replace it with an H2 header.
 """
     for section_id, section_content in lesson_dict.items():
         if not isinstance(section_content, str) or not section_content.strip():

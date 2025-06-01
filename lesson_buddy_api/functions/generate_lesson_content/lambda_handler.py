@@ -187,7 +187,7 @@ def main_agent(course_plan, lesson_data, chapter_info):
 
     Essentially, this is your full procedure:
 
-    1. Determine the requirements of the lesson topic in context of the full course. Structure this as a set of "sections" that represent individual parts of the lesson.
+    1. Determine the requirements of the lesson topic in context of the full course. Structure this as a set of "sections" that represent individual parts of the lesson. Each section must have a unique numeric ID (e.g., "1", "2", "3") to ensure the sections stay in the correct order.
     2. Based on those requirements, use the generate_lesson_content tool to generate each portion of the lesson.
     3. Request an assessment from the assessor agent by prompting it to assess the lesson based on your requirements.
     4. The assessor will give you an evaluation. 
@@ -223,7 +223,7 @@ def main_agent(course_plan, lesson_data, chapter_info):
                 },
                 "lesson_section": {
                     "type": "string",
-                    "description": "The ID/key of this particular lesson section",
+                    "description": "The ID/key of this particular lesson section. This must be a string representation of a number (e.g., '1', '2', '3') to ensure sections are ordered correctly.",
                 },                
                 },
                 "required": ["prompt","lesson_section"],

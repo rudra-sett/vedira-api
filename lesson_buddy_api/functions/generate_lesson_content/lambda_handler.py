@@ -276,13 +276,17 @@ def main_agent(course_plan, lesson_data, chapter_info):
         output = call_model(system_prompt,
         prompt = start_prompt,
         messages = messages,
-        model='gemini-2.0-flash-lite',
+        model='gemini-2.5-flash',
         tools=tools)
         
+        # fix prompt in case it was changed by empty dict
+        start_prompt = f"Please proceed with the lesson generation."
+
         if output is None:
             print("Error: call_model returned None in main_agent. Aborting.")
             # Potentially return an error state or raise an exception
-            return lesson_sections # Or an empty dict, or handle error appropriately
+            raise Exception("call_model returned None in main_agent. Aborting.")
+                
 
         messages.append(output)
         tool_result = None # Initialize tool_result

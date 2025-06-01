@@ -209,7 +209,6 @@ def lambda_handler(event, context):
     return {
         "chapter_id": chapter_id,
         "lesson_id": lesson_id,
-        "course_id": course_id, # Pass through for potential use by mark_lesson_generated
-        "lesson_content_fixed": True, # Flag indicating markdown fixing was attempted/done
-        "fixed_lesson_payload": fixed_lesson_content # The actual fixed content
+        "course_id": course_id,         
+        "lesson_content": fixed_lesson_content # The actual fixed content
     }

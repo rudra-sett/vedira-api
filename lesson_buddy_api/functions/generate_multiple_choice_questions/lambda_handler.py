@@ -3,7 +3,7 @@ import os
 from typing import Dict, Any, List, Union
 from urllib import request, parse, error as urllib_error
 import time
-# import boto3 # Placeholder if we need AWS SDK later, e.g., for Bedrock
+import boto3 # Added for S3 integration
 
 # bedrock_runtime = boto3.client(service_name='bedrock-runtime') # Placeholder
 
@@ -130,12 +130,12 @@ def generate_questions_from_content(lesson_content_markdown: str) -> List[Dict[s
     """
     system_prompt = """
     You are an expert in creating educational assessments. Based on the provided lesson content,
-    generate a list of 3 to 5 multiple-choice questions. Each question should have exactly 4 options,
+    generate a list of 10 multiple-choice questions. Each question should have exactly 4 options,
     a single correct answer (which must be one of the provided options), and a brief explanation for why that answer is correct.
     Ensure the questions accurately test understanding of the key concepts in the lesson.
     Output the questions in the specified JSON format.
     """
-    user_prompt = f"Here is the lesson content:\n\n{lesson_content_markdown}\n\nPlease generate 3 to 5 multiple-choice questions based on this content."
+    user_prompt = f"Here is the lesson content:\n\n{lesson_content_markdown}\n\nPlease generate 10 multiple-choice questions based on this content."
 
     question_schema = {
         "type": "object",
@@ -156,206 +156,219 @@ def generate_questions_from_content(lesson_content_markdown: str) -> List[Dict[s
                         "answer": {"type": "string", "description": "The correct answer, which must exactly match one of the strings in the 'options' array."},
                         "explanation": {"type": "string", "description": "A brief explanation of why the answer is correct."}
                     },
-                    "required": ["question", "options", "answer", "explanation"]
+                    "required": ["question", "options", "answer", "explanation"],
+                    
                 },
-                "description": "A list of 3 to 5 multiple-choice questions."
+                "minItems" : 10,
+                "description": "A list of 10 multiple-choice questions."
             }
         },
         "required": ["questions"]
     }
 
-    model_output = call_model(
-        system_prompt=system_prompt,
-        prompt=user_prompt,
-        output_format=question_schema,
-        model='gemini-2.5-flash' # Using a capable model for JSON generation
-    )
+    max_validation_retries = 3
+    validation_attempt = 0
+    previous_error_feedback = ""
+    
+    while validation_attempt < max_validation_retries:
+        validation_attempt += 1
+        current_prompt = user_prompt
+        if previous_error_feedback:
+            current_prompt = f"{previous_error_feedback}\n\n{user_prompt}"
+        
+        print(f"Generating questions attempt {validation_attempt}/{max_validation_retries}...")
+        if previous_error_feedback:
+            print(f"Feedback to LLM for this attempt: {previous_error_feedback}")
 
-    if model_output and 'content' in model_output and model_output['content']:
-        try:
-            # The 'content' from the LLM is expected to be a JSON string
-            # that matches the 'question_schema'
-            questions_data_str = model_output['content']
-            print(f"LLM content string for questions: {questions_data_str}")
-            questions_data = json.loads(questions_data_str)
-            
-            if "questions" in questions_data and isinstance(questions_data["questions"], list):
-                valid_questions = []
-                for q_item in questions_data["questions"]:
-                    # Basic validation
-                    if not isinstance(q_item, dict):
-                        print(f"Warning: Question item is not a dictionary: {q_item}")
-                        continue
-                    if not all(k in q_item for k in ["question", "options", "answer", "explanation"]):
-                        print(f"Warning: Question item missing required keys: {q_item}")
-                        continue
-                    if not isinstance(q_item.get("options"), list) or len(q_item["options"]) != 4:
-                         print(f"Warning: Question options malformed or not 4 options: {q_item.get('options')}")
-                         continue
-                    if q_item.get("answer") not in q_item.get("options", []):
-                        print(f"Warning: Answer '{q_item.get('answer')}' not in options {q_item.get('options')} for question '{q_item.get('question')}'")
-                        # Optionally, try to find the closest match or skip
-                        continue
-                    valid_questions.append(q_item)
+        model_output = call_model(
+            system_prompt=system_prompt,
+            prompt=current_prompt, # Use potentially modified prompt
+            output_format=question_schema,
+            model='gemini-2.5-flash'
+        )
+        
+        previous_error_feedback = "" # Reset for next potential error
+
+        if model_output and 'content' in model_output and model_output['content']:
+            try:
+                questions_data_str = model_output['content']
+                print(f"LLM content string for questions (Attempt {validation_attempt}): {questions_data_str}")
+                questions_data = json.loads(questions_data_str)
                 
-                if not valid_questions:
-                    print("Warning: No valid questions were parsed from LLM response.")
-                return valid_questions
-            else:
-                print(f"Error: 'questions' key not found or not a list in LLM response JSON: {questions_data}")
-                return []
-        except json.JSONDecodeError as e:
-            print(f"Error decoding JSON from LLM: {e}")
-            print(f"LLM raw content string: {model_output['content']}")
-            return []
-        except TypeError as e:
-            print(f"Error processing LLM content (TypeError, possibly model_output['content'] is None or not string): {e}")
-            print(f"LLM model_output: {model_output}")
-            return []
-    else:
-        print("Error: LLM call failed or did not return content.")
-        if model_output:
-            print(f"LLM model_output: {model_output}")
-        return []
+                if "questions" in questions_data and isinstance(questions_data["questions"], list):
+                    valid_questions = []
+                    error_messages_for_llm = []
+                    for i, q_item in enumerate(questions_data["questions"]):
+                        if not isinstance(q_item, dict):
+                            msg = f"Question item {i+1} is not a dictionary: {q_item}"
+                            print(f"Warning (Attempt {validation_attempt}): {msg}")
+                            error_messages_for_llm.append(msg)
+                            continue
+                        required_keys = ["question", "options", "answer", "explanation"]
+                        missing_keys = [k for k in required_keys if k not in q_item]
+                        if missing_keys:
+                            msg = f"Question item {i+1} ('{q_item.get('question', 'N/A')}') missing required keys: {', '.join(missing_keys)}."
+                            print(f"Warning (Attempt {validation_attempt}): {msg}")
+                            error_messages_for_llm.append(msg)
+                            continue
+                        
+                        options = q_item.get("options")
+                        if not isinstance(options, list) or len(options) != 4:
+                            msg = f"Question item {i+1} ('{q_item.get('question')}') options malformed or not 4 options: {options}"
+                            print(f"Warning (Attempt {validation_attempt}): {msg}")
+                            error_messages_for_llm.append(msg)
+                            continue
 
-def lambda_handler(event: Union[Dict[str, Any], str], context: Any) -> Dict[str, Any]:
+                        answer = q_item.get("answer")
+                        if answer not in options:
+                            msg = f"Question item {i+1} ('{q_item.get('question')}'): Answer '{answer}' not in options {options}."
+                            print(f"Warning (Attempt {validation_attempt}): {msg}")
+                            error_messages_for_llm.append(msg)
+                            continue
+                        valid_questions.append(q_item)
+                    
+                    if not error_messages_for_llm and len(valid_questions) >= 10:
+                        print(f"Successfully generated {len(valid_questions)} valid questions on attempt {validation_attempt}.")
+                        return valid_questions
+                    else:
+                        if len(valid_questions) < 10:
+                            error_messages_for_llm.append(f"Generated {len(valid_questions)} valid questions, but require at least 10.")
+                        
+                        feedback_intro = f"This is attempt {validation_attempt + 1} of {max_validation_retries}. In the previous attempt (attempt {validation_attempt}), the following issues were found with your generated questions:"
+                        previous_error_feedback = f"{feedback_intro}\n- " + "\n- ".join(error_messages_for_llm)
+                        print(f"Warning (Attempt {validation_attempt}): Validation issues found. {len(valid_questions)} valid questions. Details: {previous_error_feedback}")
+                
+                else: # 'questions' key not found or not a list
+                    err_msg = f"'questions' key not found or not a list in LLM response JSON: {questions_data}"
+                    print(f"Error (Attempt {validation_attempt}): {err_msg}")
+                    previous_error_feedback = f"This is attempt {validation_attempt + 1} of {max_validation_retries}. In the previous attempt (attempt {validation_attempt}), the output was not structured correctly: {err_msg}"
+
+            except json.JSONDecodeError as e:
+                err_msg = f"Error decoding JSON from LLM: {e}. Raw content: {model_output.get('content', 'Content not available')}"
+                print(f"Error (Attempt {validation_attempt}): {err_msg}")
+                previous_error_feedback = f"This is attempt {validation_attempt + 1} of {max_validation_retries}. In the previous attempt (attempt {validation_attempt}), the output was not valid JSON. {err_msg}"
+            except TypeError as e: 
+                err_msg = f"Error processing LLM content (TypeError): {e}. LLM model_output: {model_output}"
+                print(f"Error (Attempt {validation_attempt}): {err_msg}")
+                previous_error_feedback = f"This is attempt {validation_attempt + 1} of {max_validation_retries}. In the previous attempt (attempt {validation_attempt}), there was a TypeError processing the output. {err_msg}"
+        else: 
+            err_msg = "LLM call failed or did not return content."
+            print(f"Error (Attempt {validation_attempt}): {err_msg}")
+            if model_output:
+                print(f"LLM model_output: {model_output}")
+            previous_error_feedback = f"This is attempt {validation_attempt + 1} of {max_validation_retries}. In the previous attempt (attempt {validation_attempt}), the model call failed or returned no content."
+        
+        if validation_attempt < max_validation_retries:
+            print(f"Validation failed on attempt {validation_attempt}. Retrying...")
+            time.sleep(1 + validation_attempt) # Slightly increasing delay for retries
+        else:
+            print(f"Max validation retries ({max_validation_retries}) reached. Failed to generate sufficient valid questions.")
+            return [] 
+
+    return [] 
+
+def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     Lambda handler function.
-    Expects input that includes lesson markdown content.
-    Generates multiple-choice questions and adds them to the data.
+    Expects input that includes lesson markdown content, course_id, chapter_id, and lesson_id.
+    Generates multiple-choice questions, saves them to S3, and returns them along with IDs.
     """
     print(f"Received event: {json.dumps(event)}")
 
     try:
-        data_payload: Dict[str, Any] = {}
-        lesson_markdown: str = ""
-
-        if isinstance(event, dict):
-            data_payload = {k: v for k, v in event.items()} # Shallow copy
-            
-            # Determine the key for markdown content
-            # Common keys from previous steps in a potential state machine
-            markdown_keys = ['markdown_content', 'fixed_markdown', 'generated_markdown', 'lesson_content']
-            for key in markdown_keys:
-                if key in data_payload:
-                    lesson_markdown = str(data_payload[key])
-                    break
-            
-            if not lesson_markdown and 'body' in data_payload and isinstance(data_payload['body'], dict) and 'lesson_content' in data_payload['body']:
-                 # Handle case where lesson_content might be nested if coming from generate_lesson_content directly
-                 lesson_markdown = str(data_payload['body']['lesson_content'])
-
-
-            if not lesson_markdown:
-                 # If event is a dict but no markdown key is found, this is an issue.
-                raise ValueError("Input dictionary is missing a recognized markdown key (e.g., 'markdown_content', 'fixed_markdown', 'generated_markdown', 'lesson_content')")
+        # Extract IDs needed for S3 path and return value
+        course_id = event.get('course_id')
+        chapter_id = event.get('chapter_id')
+        lesson_id = event.get('lesson_id')
         
-        elif isinstance(event, str):
-            lesson_markdown = event
-            data_payload = {'markdown_content': lesson_markdown} # Initialize data_payload
-        
-        else:
-            raise ValueError(f"Unexpected event type: {type(event)}. Expected dict or str.")
+        # The S3 saving logic in fix_lesson_markdown expects these to be top-level in the event
+        # If they are nested under 'body' from a previous step, adjust accordingly or ensure
+        # the Step Function passes them at the top level.
+        # For now, assuming they are top-level as per fix_lesson_markdown's expectation for its inputs.
 
-        if not lesson_markdown.strip():
-             raise ValueError("Unable to extract or received empty lesson markdown content from the event.")
+        if not all([course_id, chapter_id, lesson_id]):
+            missing_ids = [k for k, v in {'course_id': course_id, 'chapter_id': chapter_id, 'lesson_id': lesson_id}.items() if not v]
+            raise ValueError(f"Missing required IDs in input event: {', '.join(missing_ids)}")
 
-        print(f"Extracted lesson markdown (first 100 chars): {lesson_markdown[:100]}...")
+        lesson_markdown = event.get('lesson_content', None)
+
+        # If lesson_content is passed via an API Gateway event, it might be in event['body']
+        # and might be a stringified JSON.
+        # However, if this lambda is part of a Step Function, lesson_content might be directly
+        # available from the output of a previous state.
+        if not lesson_markdown and 'body' in event:
+            body_content = event['body']
+            if isinstance(body_content, str):
+                try:
+                    body_content = json.loads(body_content)
+                except json.JSONDecodeError:
+                    # If body is not JSON, it might be the raw markdown string itself.
+                    # This case is less likely if following a consistent pattern.
+                    pass # Keep body_content as string if not parsable JSON
+            
+            if isinstance(body_content, dict):
+                lesson_markdown = body_content.get('lesson_content')
+            elif isinstance(body_content, str): # If body was a non-JSON string
+                 # This assumes if body is a string, it *is* the lesson_markdown.
+                 # This part is a bit ambiguous without knowing the exact preceding step's output.
+                 # For robustness, let's prioritize event.get('lesson_content')
+                 # and only fall back to complex body parsing if necessary.
+                 # The current structure of generate_lesson_content returns lesson_content at top level.
+                 pass
+
+
+        if lesson_markdown and isinstance(lesson_markdown, dict):
+            # If lesson_content is a dict (e.g. {'section1': 'content1', ...}), convert to string.
+            # The question generation function expects a single markdown string.
+            # We might need a more sophisticated way to join sections if it's a dict.
+            # For now, simple string conversion.
+            lesson_markdown = "\n\n".join(lesson_markdown.values())
+
+
+        if not lesson_markdown or not isinstance(lesson_markdown, str) or not lesson_markdown.strip():
+             raise ValueError(f"Unable to extract or received empty/invalid lesson markdown content from the event. Content: {lesson_markdown}")
+
         multiple_choice_questions: List[Dict[str, Any]] = generate_questions_from_content(lesson_markdown)
         
         if not multiple_choice_questions:
-            print("Warning: No multiple choice questions were generated. Proceeding with an empty list.")
-            # Decide if this should be an error or if an empty list is acceptable.
-            # For now, allowing empty list.
-            
-        data_payload['multiple_choice_questions'] = multiple_choice_questions
-        
-        print(f"Generated questions, final output payload (first 200 chars of questions): {json.dumps(data_payload)[:200]}...")
+            # Changed to return an empty list in the expected structure rather than raising ValueError immediately,
+            # to allow S3 saving of an empty list if that's desired, or further handling.
+            # However, the prompt implies an error if no questions. Let's stick to raising an error.
+            raise ValueError("No questions were generated from the lesson content.")
 
-        return data_payload
+        # Save the multiple choice questions to S3
+        s3 = boto3.client('s3')
+        bucket_name = os.environ.get('QUESTIONS_BUCKET_NAME') # New environment variable
+        if not bucket_name:
+            error_msg = "QUESTIONS_BUCKET_NAME environment variable not set."
+            print(error_msg)
+            raise ValueError(error_msg)
+    
+        s3_key = f"{course_id}-{chapter_id}-{lesson_id}-questions.json" # Using a structured path
+        try:
+            s3.put_object(
+                Bucket=bucket_name, 
+                Key=s3_key, 
+                Body=json.dumps(multiple_choice_questions, indent=2), # Added indent for readability
+                ContentType='application/json' # Added ContentType
+            )
+            print(f"Successfully saved multiple choice questions to S3: s3://{bucket_name}/{s3_key}")
+        except Exception as e:
+            print(f"Error saving multiple choice questions to S3 (s3://{bucket_name}/{s3_key}): {e}")
+            raise # Re-raise the exception to indicate failure
+
+        # Return structure similar to fix_lesson_markdown
+        return {
+            "course_id": course_id,
+            "chapter_id": chapter_id,
+            "lesson_id": lesson_id,
+            "questions_s3_path": f"s3://{bucket_name}/{s3_key}",
+            "multiple_choice_questions": multiple_choice_questions 
+        }
 
     except Exception as e:
         print(f"Error in generate_multiple_choice_questions lambda_handler: {str(e)}")
         # Re-raise to let Step Functions (or caller) handle it.
-        # Consider specific error reporting if this integrates with a larger system.
+        # Ensure the error is propagated correctly for Step Function error handling.
+        # The default re-raise should be sufficient.
         raise
-
-if __name__ == '__main__':
-    # Mock environment variables for local testing if not set externally
-    os.environ.setdefault('API_KEY', 'your_gemini_api_key_here_if_not_set') # Replace with a real key for actual calls
-    os.environ.setdefault('BEDROCK_API_KEY', 'your_bedrock_api_key_here_if_not_set')
-
-    print("\n--- Testing with sample_event_from_fix_markdown ---")
-    sample_event_from_fix_markdown = {
-       "lesson_id": "lesson123",
-       "chapter_id": "chapter01",
-       "course_id": "courseABC",
-       "markdown_content": "# Chapter 1: Introduction to Python\nPython is a versatile language. You can make web apps, do data science, or automate tasks.\n\nKey concepts:\n- Variables\n- Data Types (integers, strings, lists)\n- Basic syntax"
-    }
-    # To prevent actual API calls during this simulated test, you might mock call_model or ensure API keys are dummy values
-    # For a true local test, ensure API keys are valid and models are accessible.
-    try:
-        result_fix_style = lambda_handler(sample_event_from_fix_markdown, None)
-        print(json.dumps(result_fix_style, indent=2))
-    except Exception as e:
-        print(f"Test failed for sample_event_from_fix_markdown: {e}")
-
-
-    print("\n--- Testing with sample_event_direct_markdown (string input) ---")
-    sample_event_direct_markdown = "# Chapter 2: Advanced Python\nThis lesson covers decorators and generators.\nDecorators allow you to modify functions or methods in a clean way.\nGenerators are useful for creating iterators with a simpler syntax."
-    try:
-        result_direct = lambda_handler(sample_event_direct_markdown, None) 
-        print(json.dumps(result_direct, indent=2))
-    except Exception as e:
-        print(f"Test failed for sample_event_direct_markdown: {e}")
-
-    print("\n--- Testing with sample_event_from_generate_lesson_content_style ---")
-    # This simulates output from a previous 'generate_lesson_content' step
-    sample_event_from_generate_lesson_content_style = {
-        "lesson_id": "lesson456",
-        "chapter_id": "chapter02",
-        "course_id": "courseXYZ",
-        "lesson_content": "## Topic: Object-Oriented Programming\nOOP involves classes, objects, inheritance, and polymorphism. Python supports OOP principles.", # Key for markdown
-        "original_course_plan_details": "Some other data from course plan"
-    }
-    try:
-        result_gen_style = lambda_handler(sample_event_from_generate_lesson_content_style, None)
-        print(json.dumps(result_gen_style, indent=2))
-    except Exception as e:
-        print(f"Test failed for sample_event_from_generate_lesson_content_style: {e}")
-
-
-    print("\n--- Testing with event missing a known markdown key ---")
-    sample_event_missing_key = {
-        "lesson_id": "lesson789",
-        "chapter_id": "chapter03",
-        "some_other_data": "value"
-    }
-    try:
-        lambda_handler(sample_event_missing_key, None)
-    except ValueError as e:
-        print(f"Caught expected error for missing key: {e}")
-    except Exception as e:
-        print(f"Test failed with unexpected error for missing key: {e}")
-
-
-    print("\n--- Testing with unexpected event type (e.g., integer) ---")
-    sample_event_wrong_type = 12345
-    try:
-        lambda_handler(sample_event_wrong_type, None) # type: ignore
-    except ValueError as e:
-        print(f"Caught expected error for wrong type: {e}")
-    except Exception as e:
-        print(f"Test failed with unexpected error for wrong type: {e}")
-
-    print("\n--- Testing with empty markdown string ---")
-    sample_event_empty_markdown = {
-       "lesson_id": "lesson101",
-       "markdown_content": "   " # Whitespace only
-    }
-    try:
-        lambda_handler(sample_event_empty_markdown, None)
-    except ValueError as e:
-        print(f"Caught expected error for empty markdown: {e}")
-    except Exception as e:
-        print(f"Test failed with unexpected error for empty markdown: {e}")

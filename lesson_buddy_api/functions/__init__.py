@@ -320,14 +320,14 @@ class Functions(Construct): # Changed from Stack to Construct
                 "Generate Lesson Content": {
                     "Type": "Task",
                     "Resource": "arn:aws:states:::lambda:invoke",
-                    "Output": "{% $states.result.Payload %}", # Output of generate_lesson_content
+                    "Output": "{% $states.result.Payload %}",
                     "Arguments": {
                     "FunctionName": self.generate_lesson_content_function.function_arn,
-                    "Payload": { # Ensure this payload structure matches what generate_lesson_content expects
-                        "body": { # generate_lesson_content expects 'body'
-                           "lesson_id": "{% $states.input.id %}",
-                           "chapter_id": "{% $chapter_id %}",
-                           "course_plan": "{% $course_plan %}"
+                    "Payload": {
+                        "body": {
+                        "lesson_id": "{% $states.input.id %}",
+                        "chapter_id": "{% $chapter_id %}",
+                        "course_plan": "{% $course_plan %}"
                         }
                     }
                     },
@@ -345,15 +345,15 @@ class Functions(Construct): # Changed from Stack to Construct
                         "JitterStrategy": "FULL"
                     }
                     ],
-                    "Next": "Fix Lesson Markdown" # Next step is the markdown fixer
+                    "Next": "Fix Lesson Markdown"
                 },
                 "Fix Lesson Markdown": {
                     "Type": "Task",
                     "Resource": "arn:aws:states:::lambda:invoke",
-                    "Output": "{% $states.result.Payload %}", # Output of fix_lesson_markdown
+                    "Output": "{% $states.result.Payload %}",
                     "Arguments": {
-                        "FunctionName": self.fix_lesson_markdown_function.function_arn,
-                        "Payload": "{% $states.input %}" # Pass the entire output of the previous step
+                    "FunctionName": self.fix_lesson_markdown_function.function_arn,
+                    "Payload": "{% $states.input %}"
                     },
                     "Retry": [
                     {
@@ -369,36 +369,88 @@ class Functions(Construct): # Changed from Stack to Construct
                         "JitterStrategy": "FULL"
                     }
                     ],
-                    "End": True # This is the last step in the ItemProcessor
+                    "End": True
                 }
                 }
             },
-            "Next": "Save Lesson States to S3", # This 'Next' is for the Map state itself
+            "Next": "Parallel",
             "Items": "{% $states.input.lessons %}"
             },
-            "Save Lesson States to S3": {
-            "Type": "Task",
-            "Resource": "arn:aws:states:::lambda:invoke",
-            "Output": "{% $states.result.Payload %}",
-            "Arguments": {
-                "FunctionName": self.mark_lesson_generated_function.function_arn,
-                "Payload": {
-                "updated_lessons": "{% $states.input %}",
-                "course_plan": "{% $course_plan %}"
-                }
-            },
-            "Retry": [
+            "Parallel": {
+            "Type": "Parallel",
+            "Branches": [
                 {
-                "ErrorEquals": [
-                    "Lambda.ServiceException",
-                    "Lambda.AWSLambdaException",
-                    "Lambda.SdkClientException",
-                    "Lambda.TooManyRequestsException"
-                ],
-                "IntervalSeconds": 1,
-                "MaxAttempts": 3,
-                "BackoffRate": 2,
-                "JitterStrategy": "FULL"
+                "StartAt": "Save Lesson States to DynamoDB",
+                "States": {
+                    "Save Lesson States to DynamoDB": {
+                    "Type": "Task",
+                    "Resource": "arn:aws:states:::lambda:invoke",
+                    "Output": "{% $states.result.Payload %}",
+                    "Arguments": {
+                        "FunctionName": self.mark_lesson_generated_function.function_arn,
+                        "Payload": {
+                        "updated_lessons": "{% $states.input %}",
+                        "course_plan": "{% $course_plan %}"
+                        }
+                    },
+                    "Retry": [
+                        {
+                        "ErrorEquals": [
+                            "Lambda.ServiceException",
+                            "Lambda.AWSLambdaException",
+                            "Lambda.SdkClientException",
+                            "Lambda.TooManyRequestsException"
+                        ],
+                        "IntervalSeconds": 1,
+                        "MaxAttempts": 3,
+                        "BackoffRate": 2,
+                        "JitterStrategy": "FULL"
+                        }
+                    ],
+                    "End": True
+                    }
+                }
+                },
+                {
+                "StartAt": "Generate Questions for Each Lesson",
+                "States": {
+                    "Generate Questions for Each Lesson": {
+                    "Type": "Map",
+                    "ItemProcessor": {
+                        "ProcessorConfig": {
+                        "Mode": "INLINE"
+                        },
+                        "StartAt": "Generate Questions",
+                        "States": {
+                        "Generate Questions": {
+                            "Type": "Task",
+                            "Resource": "arn:aws:states:::lambda:invoke",
+                            "Output": "{% $states.result.Payload %}",
+                            "Arguments": {
+                            "FunctionName": self.generate_multiple_choice_questions_function.function_arn,
+                            "Payload": "{% $states.input %}"
+                            },
+                            "Retry": [
+                            {
+                                "ErrorEquals": [
+                                "Lambda.ServiceException",
+                                "Lambda.AWSLambdaException",
+                                "Lambda.SdkClientException",
+                                "Lambda.TooManyRequestsException"
+                                ],
+                                "IntervalSeconds": 1,
+                                "MaxAttempts": 3,
+                                "BackoffRate": 2,
+                                "JitterStrategy": "FULL"
+                            }
+                            ],
+                            "End": True
+                        }
+                        }
+                    },
+                    "End": True
+                    }
+                }
                 }
             ],
             "End": True

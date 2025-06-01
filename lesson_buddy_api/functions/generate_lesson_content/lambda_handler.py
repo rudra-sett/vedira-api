@@ -275,7 +275,7 @@ def main_agent(course_plan, lesson_data, chapter_info):
         output = call_model(system_prompt,
         prompt = f"Please proceed.",
         messages = messages,
-        model='gemini-2.0-flash-lite-001',
+        model='gemini-2.0-flash-lite',
         tools=tools)
         
         if output is None:

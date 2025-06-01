@@ -404,7 +404,7 @@ class Functions(Construct): # Changed from Stack to Construct
                     "Resource": "arn:aws:states:::lambda:invoke",
                     "Output": "{% $states.result.Payload %}",
                     "Arguments": {
-                        "FunctionName": self.mark_lesson_generated_function.function_arn,
+                        "FunctionName": self.update_chapter_status_function.function_arn,
                         "Payload": {
                         "updated_lessons": "{% $states.input %}",
                         "course_plan": "{% $course_plan %}"

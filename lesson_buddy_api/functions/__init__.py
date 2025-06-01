@@ -138,18 +138,18 @@ class Functions(Construct): # Changed from Stack to Construct
         )
         questions_bucket.grant_read(self.get_multiple_choice_questions_function)
 
-        # Add function to the stack from folder mark_lesson_generated
-        self.mark_lesson_generated_function = _lambda.Function(
-            self, "MarkLessonGeneratedFunction",
+        # Add function to the stack from folder update_chapter_status (renamed from mark_lesson_generated)
+        self.update_chapter_status_function = _lambda.Function(
+            self, "UpdateChapterStatusFunction", # Renamed construct ID
             runtime=_lambda.Runtime.PYTHON_3_13,
             handler="lambda_handler.lambda_handler", 
-            code=_lambda.Code.from_asset("lesson_buddy_api/functions/mark_lesson_generated"),
+            code=_lambda.Code.from_asset("lesson_buddy_api/functions/update_chapter_status"), # Updated code path
             timeout=Duration.minutes(15),
             environment={
                 "COURSE_TABLE_NAME": course_table.table_name
             }
         )
-        course_table.grant_write_data(self.mark_lesson_generated_function)
+        course_table.grant_write_data(self.update_chapter_status_function) # Grant to new function name
 
         # Add function to the stack from folder check_chapter_generation_status
         self.check_chapter_generation_status_function = _lambda.Function(
@@ -159,9 +159,11 @@ class Functions(Construct): # Changed from Stack to Construct
             code=_lambda.Code.from_asset("lesson_buddy_api/functions/check_chapter_generation_status"),
             timeout=Duration.minutes(1), # Short timeout as it's a status check
             environment={
+                "COURSE_TABLE_NAME": course_table.table_name # Added for DynamoDB access
                 # No specific environment variables needed for this function yet
             }
         )
+        course_table.grant_read_data(self.check_chapter_generation_status_function) # Added DynamoDB read permission
         # Grant permission to describe Step Function executions
         self.check_chapter_generation_status_function.add_to_role_policy(iam.PolicyStatement(
             actions=["states:DescribeExecution"],
@@ -487,7 +489,7 @@ class Functions(Construct): # Changed from Stack to Construct
             self.get_course_plan_function,
             self.generate_lesson_content_function,
             self.fix_lesson_markdown_function,
-            self.mark_lesson_generated_function,
+            self.update_chapter_status_function, # Renamed from mark_lesson_generated_function
             self.generate_multiple_choice_questions_function # Added new function
         ]
 

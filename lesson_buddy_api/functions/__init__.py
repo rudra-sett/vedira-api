@@ -109,6 +109,20 @@ class Functions(Construct): # Changed from Stack to Construct
         )
         lesson_bucket.grant_write(self.fix_lesson_markdown_function) # It needs to save the fixed content
 
+        # Add function to the stack from folder generate_multiple_choice_questions
+        self.generate_multiple_choice_questions_function = _lambda.Function(
+            self, "GenerateMultipleChoiceQuestionsFunction",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            handler="lambda_handler.lambda_handler",
+            code=_lambda.Code.from_asset("lesson_buddy_api/functions/generate_multiple_choice_questions"),
+            timeout=Duration.minutes(5), 
+            environment={
+                "API_KEY": os.environ.get("API_KEY", ""), 
+                "BEDROCK_API_KEY": os.environ.get("BEDROCK_API_KEY", ""), 
+            }
+        )
+        # Note: Permissions for this function to access other services (if any) are not added here.
+
         # Add function to the stack from folder mark_lesson_generated
         self.mark_lesson_generated_function = _lambda.Function(
             self, "MarkLessonGeneratedFunction",
@@ -405,8 +419,9 @@ class Functions(Construct): # Changed from Stack to Construct
         lambda_functions_to_invoke = [
             self.get_course_plan_function,
             self.generate_lesson_content_function,
-            self.fix_lesson_markdown_function, # Add the new function here
-            self.mark_lesson_generated_function
+            self.fix_lesson_markdown_function,
+            self.mark_lesson_generated_function,
+            self.generate_multiple_choice_questions_function # Added new function
         ]
 
         for lambda_func in lambda_functions_to_invoke:

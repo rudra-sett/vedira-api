@@ -27,16 +27,13 @@ def lambda_handler(event, context):
     
     lesson_content = main_agent(course_plan, lesson_data, chapter_info)
 
-    # save to s3
-    s3 = boto3.client('s3')
-    bucket_name = os.environ.get('LESSON_BUCKET_NAME')
-    if not bucket_name:
-        raise ValueError("LESSON_BUCKET_NAME environment variable not set.")
-    s3.put_object(Bucket=bucket_name, Key=f"{course_plan['CourseID']}-{chapter_id}-{lesson_id}.json", Body=json.dumps(lesson_content))
-    
+    # S3 saving will be handled by the fix_lesson_markdown Lambda
+    # Ensure all necessary IDs and the content are returned for the next step.
     return {
         "chapter_id" : chapter_id,
-        "lesson_id" : lesson_id                
+        "lesson_id" : lesson_id,
+        "lesson_content": lesson_content,
+        "course_id": course_plan['CourseID'] 
     }
 
 

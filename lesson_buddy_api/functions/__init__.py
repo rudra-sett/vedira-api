@@ -94,6 +94,21 @@ class Functions(Construct): # Changed from Stack to Construct
         )
         lesson_bucket.grant_write(self.generate_lesson_content_function)
 
+        # Add function to the stack from folder fix_lesson_markdown
+        self.fix_lesson_markdown_function = _lambda.Function(
+            self, "FixLessonMarkdownFunction",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            handler="lambda_handler.lambda_handler",
+            code=_lambda.Code.from_asset("lesson_buddy_api/functions/fix_lesson_markdown"),
+            timeout=Duration.minutes(5), # Markdown fixing should be relatively quick
+            environment={
+                "API_KEY": os.environ.get("API_KEY", ""),
+                "BEDROCK_API_KEY": os.environ.get("BEDROCK_API_KEY", ""),
+                "LESSON_BUCKET_NAME": lesson_bucket.bucket_name
+            }
+        )
+        lesson_bucket.grant_write(self.fix_lesson_markdown_function) # It needs to save the fixed content
+
         # Add function to the stack from folder mark_lesson_generated
         self.mark_lesson_generated_function = _lambda.Function(
             self, "MarkLessonGeneratedFunction",
@@ -291,14 +306,14 @@ class Functions(Construct): # Changed from Stack to Construct
                 "Generate Lesson Content": {
                     "Type": "Task",
                     "Resource": "arn:aws:states:::lambda:invoke",
-                    "Output": "{% $states.result.Payload %}",
+                    "Output": "{% $states.result.Payload %}", # Output of generate_lesson_content
                     "Arguments": {
                     "FunctionName": self.generate_lesson_content_function.function_arn,
-                    "Payload": {
-                        "body": {
-                        "lesson_id": "{% $states.input.id %}",
-                        "chapter_id": "{% $chapter_id %}",
-                        "course_plan": "{% $course_plan %}"
+                    "Payload": { # Ensure this payload structure matches what generate_lesson_content expects
+                        "body": { # generate_lesson_content expects 'body'
+                           "lesson_id": "{% $states.input.id %}",
+                           "chapter_id": "{% $chapter_id %}",
+                           "course_plan": "{% $course_plan %}"
                         }
                     }
                     },
@@ -316,11 +331,35 @@ class Functions(Construct): # Changed from Stack to Construct
                         "JitterStrategy": "FULL"
                     }
                     ],
-                    "End": True
+                    "Next": "Fix Lesson Markdown" # Next step is the markdown fixer
+                },
+                "Fix Lesson Markdown": {
+                    "Type": "Task",
+                    "Resource": "arn:aws:states:::lambda:invoke",
+                    "Output": "{% $states.result.Payload %}", # Output of fix_lesson_markdown
+                    "Arguments": {
+                        "FunctionName": self.fix_lesson_markdown_function.function_arn,
+                        "Payload": "{% $ %}" # Pass the entire output of the previous step
+                    },
+                    "Retry": [
+                    {
+                        "ErrorEquals": [
+                        "Lambda.ServiceException",
+                        "Lambda.AWSLambdaException",
+                        "Lambda.SdkClientException",
+                        "Lambda.TooManyRequestsException"
+                        ],
+                        "IntervalSeconds": 1,
+                        "MaxAttempts": 3,
+                        "BackoffRate": 2,
+                        "JitterStrategy": "FULL"
+                    }
+                    ],
+                    "End": True # This is the last step in the ItemProcessor
                 }
                 }
             },
-            "Next": "Save Lesson States to S3",
+            "Next": "Save Lesson States to S3", # This 'Next' is for the Map state itself
             "Items": "{% $states.input.lessons %}"
             },
             "Save Lesson States to S3": {
@@ -366,6 +405,7 @@ class Functions(Construct): # Changed from Stack to Construct
         lambda_functions_to_invoke = [
             self.get_course_plan_function,
             self.generate_lesson_content_function,
+            self.fix_lesson_markdown_function, # Add the new function here
             self.mark_lesson_generated_function
         ]
 

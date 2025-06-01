@@ -281,200 +281,295 @@ class Functions(Construct): # Changed from Stack to Construct
         ))
 
         step_function_definition = {
-        "Comment": "A description of my state machine",
-        "StartAt": "Get Course Plan",
-        "States": {
-            "Get Course Plan": {
-            "Type": "Task",
-            "Resource": "arn:aws:states:::lambda:invoke",
-            "Output": "{% $states.result.Payload %}",
-            "Arguments": {
-                "FunctionName": self.get_course_plan_function.function_arn,
-                "Payload": {
-                "queryStringParameters": {
-                    "course_id": "{% $states.input.course_id %}",
-                    "user_id": "{% $states.input.user_id %}"
-                }
-                }
-            },
-            "Retry": [
-                {
-                "ErrorEquals": [
-                    "Lambda.ServiceException",
-                    "Lambda.AWSLambdaException",
-                    "Lambda.SdkClientException",
-                    "Lambda.TooManyRequestsException"
-                ],
-                "IntervalSeconds": 1,
-                "MaxAttempts": 3,
-                "BackoffRate": 2,
-                "JitterStrategy": "FULL"
-                }
-            ],
-            "Next": "Extract Chapter from Course Plan",
-            "Assign": {
-                "chapter_id": "{% $states.input.chapter_id %}"
-            }
-            },
-            "Extract Chapter from Course Plan": {
-            "Type": "Pass",
-            "Next": "Generate Each Lesson in Chapter",
-            "Output": {
-                "lessons": "{% $single($parse($states.input.body).chapters, function($v) {$v.id = $chapter_id}).lessons %}"
-            },
-            "Assign": {
-                "course_plan": "{% $parse($states.input.body) %}"
-            }
-            },
-            "Generate Each Lesson in Chapter": {
-            "Type": "Map",
-            "ItemProcessor": {
-                "ProcessorConfig": {
-                "Mode": "INLINE"
-                },
-                "StartAt": "Generate Lesson Content",
-                "States": {
-                "Generate Lesson Content": {
-                    "Type": "Task",
-                    "Resource": "arn:aws:states:::lambda:invoke",
-                    "Output": "{% $states.result.Payload %}",
-                    "Arguments": {
-                    "FunctionName": self.generate_lesson_content_function.function_arn,
+            "Comment": "A description of my state machine",
+            "StartAt": "Get Course Plan",
+            "States": {
+                "Get Course Plan": {
+                "Type": "Task",
+                "Resource": "arn:aws:states:::lambda:invoke",
+                "OutputPath": "{% $states.result.Payload %}",
+                "Parameters": {
+                    "FunctionName": self.get_course_plan_function.function_arn,
                     "Payload": {
-                        "body": {
-                        "lesson_id": "{% $states.input.id %}",
-                        "chapter_id": "{% $chapter_id %}",
-                        "course_plan": "{% $course_plan %}"
-                        }
+                    "queryStringParameters": {
+                        "course_id": "{% $states.input.course_id %}",
+                        "user_id": "{% $states.input.user_id %}"
                     }
-                    },
-                    "Retry": [
-                    {
-                        "ErrorEquals": [
-                        "Lambda.ServiceException",
-                        "Lambda.AWSLambdaException",
-                        "Lambda.SdkClientException",
-                        "Lambda.TooManyRequestsException"
-                        ],
-                        "IntervalSeconds": 1,
-                        "MaxAttempts": 3,
-                        "BackoffRate": 2,
-                        "JitterStrategy": "FULL"
                     }
-                    ],
-                    "Next": "Fix Lesson Markdown"
                 },
-                "Fix Lesson Markdown": {
-                    "Type": "Task",
-                    "Resource": "arn:aws:states:::lambda:invoke",
-                    "Output": "{% $states.result.Payload %}",
-                    "Arguments": {
-                    "FunctionName": self.fix_lesson_markdown_function.function_arn,
-                    "Payload": "{% $states.input %}"
-                    },
-                    "Retry": [
+                "Retry": [
                     {
-                        "ErrorEquals": [
+                    "ErrorEquals": [
                         "Lambda.ServiceException",
                         "Lambda.AWSLambdaException",
                         "Lambda.SdkClientException",
                         "Lambda.TooManyRequestsException"
-                        ],
-                        "IntervalSeconds": 1,
-                        "MaxAttempts": 3,
-                        "BackoffRate": 2,
-                        "JitterStrategy": "FULL"
-                    }
                     ],
-                    "End": True
+                    "IntervalSeconds": 1,
+                    "MaxAttempts": 3,
+                    "BackoffRate": 2,
+                    "JitterStrategy": "FULL"
+                    }
+                ],
+                "Next": "Extract Chapter from Course Plan",
+                "Assign": {
+                    "chapter_id": "{% $states.input.chapter_id %}",
+                    "user_id": "{% $states.input.user_id %}",
+                    "course_id": "{% $states.input.course_id %}"
                 }
+                },
+                "Extract Chapter from Course Plan": {
+                "Type": "Pass",
+                "Next": "Mark Chapter as Generating",
+                "Output": {
+                    "lessons": "{% $single($parse($states.input.body).chapters, function($v) {$v.id = $chapter_id}).lessons %}"
+                },
+                "Assign": {
+                    "course_plan": "{% $parse($states.input.body) %}"
                 }
-            },
-            "Next": "Parallel",
-            "Items": "{% $states.input.lessons %}"
-            },
-            "Parallel": {
-            "Type": "Parallel",
-            "Branches": [
-                {
-                "StartAt": "Save Lesson States to DynamoDB",
-                "States": {
-                    "Save Lesson States to DynamoDB": {
-                    "Type": "Task",
-                    "Resource": "arn:aws:states:::lambda:invoke",
-                    "Output": "{% $states.result.Payload %}",
-                    "Arguments": {
-                        "FunctionName": self.update_chapter_status_function.function_arn,
-                        "Payload": {
-                        "updated_lessons": "{% $states.input %}",
-                        "course_plan": "{% $course_plan %}"
-                        }
+                },
+                "Mark Chapter as Generating": {
+                "Type": "Task",
+                "Resource": "arn:aws:states:::lambda:invoke",
+                "OutputPath": "{% $states.input %}",
+                "Parameters": {
+                    "FunctionName": self.update_chapter_status_function.function_arn,
+                    "Payload": {
+                    "course_id": "{% $course_id %}",
+                    "user_id": "{% $user_id %}",
+                    "chapter_id": "{% $chapter_id %}",
+                    "status_type": "lessons",
+                    "new_status": "GENERATING"
+                    }
+                },
+                "Retry": [
+                    {
+                    "ErrorEquals": [
+                        "Lambda.ServiceException",
+                        "Lambda.AWSLambdaException",
+                        "Lambda.SdkClientException",
+                        "Lambda.TooManyRequestsException"
+                    ],
+                    "IntervalSeconds": 1,
+                    "MaxAttempts": 3,
+                    "BackoffRate": 2,
+                    "JitterStrategy": "FULL"
+                    }
+                ],
+                "Next": "Generate Each Lesson in Chapter"
+                },
+                "Generate Each Lesson in Chapter": {
+                "Type": "Map",
+                "ItemProcessor": {
+                    "ProcessorConfig": {
+                    "Mode": "INLINE"
                     },
-                    "Retry": [
+                    "StartAt": "Generate Lesson Content",
+                    "States": {
+                    "Generate Lesson Content": {
+                        "Type": "Task",
+                        "Resource": "arn:aws:states:::lambda:invoke",
+                        "OutputPath": "{% $states.result.Payload %}",
+                        "Parameters": {
+                        "FunctionName": self.generate_lesson_content_function.function_arn,
+                        "Payload": {
+                            "body": {
+                            "lesson_id": "{% $states.input.id %}",
+                            "chapter_id": "{% $chapter_id %}",
+                            "course_plan": "{% $course_plan %}"
+                            }
+                        }
+                        },
+                        "Retry": [
                         {
-                        "ErrorEquals": [
+                            "ErrorEquals": [
                             "Lambda.ServiceException",
                             "Lambda.AWSLambdaException",
                             "Lambda.SdkClientException",
                             "Lambda.TooManyRequestsException"
-                        ],
-                        "IntervalSeconds": 1,
-                        "MaxAttempts": 3,
-                        "BackoffRate": 2,
-                        "JitterStrategy": "FULL"
+                            ],
+                            "IntervalSeconds": 1,
+                            "MaxAttempts": 3,
+                            "BackoffRate": 2,
+                            "JitterStrategy": "FULL"
                         }
-                    ],
-                    "End": True
-                    }
-                }
-                },
-                {
-                "StartAt": "Generate Questions for Each Lesson",
-                "States": {
-                    "Generate Questions for Each Lesson": {
-                    "Type": "Map",
-                    "ItemProcessor": {
-                        "ProcessorConfig": {
-                        "Mode": "INLINE"
+                        ],
+                        "Next": "Fix Lesson Markdown"
+                    },
+                    "Fix Lesson Markdown": {
+                        "Type": "Task",
+                        "Resource": "arn:aws:states:::lambda:invoke",
+                        "OutputPath": "{% $states.result.Payload %}",
+                        "Parameters": {
+                        "FunctionName": self.fix_lesson_markdown_function.function_arn,
+                        "Payload": "{% $states.input %}"
                         },
-                        "StartAt": "Generate Questions",
-                        "States": {
-                        "Generate Questions": {
-                            "Type": "Task",
-                            "Resource": "arn:aws:states:::lambda:invoke",
-                            "Output": "{% $states.result.Payload %}",
-                            "Arguments": {
-                            "FunctionName": self.generate_multiple_choice_questions_function.function_arn,
-                            "Payload": "{% $states.input %}"
-                            },
-                            "Retry": [
+                        "Retry": [
+                        {
+                            "ErrorEquals": [
+                            "Lambda.ServiceException",
+                            "Lambda.AWSLambdaException",
+                            "Lambda.SdkClientException",
+                            "Lambda.TooManyRequestsException"
+                            ],
+                            "IntervalSeconds": 1,
+                            "MaxAttempts": 3,
+                            "BackoffRate": 2,
+                            "JitterStrategy": "FULL"
+                        }
+                        ],
+                        "End": True
+                    }
+                    }
+                },
+                "Next": "Parallel",
+                "Items": "{% $states.input.lessons %}"
+                },
+                "Parallel": {
+                "Type": "Parallel",
+                "Branches": [
+                    {
+                    "StartAt": "Save Chapter State to DynamoDB",
+                    "States": {
+                        "Save Chapter State to DynamoDB": {
+                        "Type": "Task",
+                        "Resource": "arn:aws:states:::lambda:invoke",
+                        "OutputPath": "{% $states.result.Payload %}",
+                        "Parameters": {
+                            "FunctionName": self.update_chapter_status_function.function_arn,
+                            "Payload": {
+                            "course_id": "{% $course_id %}",
+                            "user_id": "{% $user_id %}",
+                            "chapter_id": "{% $chapter_id %}",
+                            "status_type": "lessons",
+                            "new_status": "COMPLETED"
+                            }
+                        },
+                        "Retry": [
                             {
-                                "ErrorEquals": [
+                            "ErrorEquals": [
                                 "Lambda.ServiceException",
                                 "Lambda.AWSLambdaException",
                                 "Lambda.SdkClientException",
                                 "Lambda.TooManyRequestsException"
-                                ],
-                                "IntervalSeconds": 1,
-                                "MaxAttempts": 3,
-                                "BackoffRate": 2,
-                                "JitterStrategy": "FULL"
-                            }
                             ],
-                            "End": True
+                            "IntervalSeconds": 1,
+                            "MaxAttempts": 3,
+                            "BackoffRate": 2,
+                            "JitterStrategy": "FULL"
+                            }
+                        ],
+                        "End": True
                         }
-                        }
-                    },
-                    "End": True
                     }
+                    },
+                    {
+                    "StartAt": "Mark MCQs as Generating",
+                    "States": {
+                        "Mark MCQs as Generating": {
+                        "Type": "Task",
+                        "Resource": "arn:aws:states:::lambda:invoke",
+                        "OutputPath": "{% $states.result.Payload %}",
+                        "Parameters": {
+                            "FunctionName": self.update_chapter_status_function.function_arn,
+                            "Payload": {
+                            "course_id": "{% $course_id %}",
+                            "user_id": "{% $user_id %}",
+                            "chapter_id": "{% $chapter_id %}",
+                            "status_type": "mcqs",
+                            "new_status": "GENERATING"
+                            }
+                        },
+                        "Retry": [
+                            {
+                            "ErrorEquals": [
+                                "Lambda.ServiceException",
+                                "Lambda.AWSLambdaException",
+                                "Lambda.SdkClientException",
+                                "Lambda.TooManyRequestsException"
+                            ],
+                            "IntervalSeconds": 1,
+                            "MaxAttempts": 3,
+                            "BackoffRate": 2,
+                            "JitterStrategy": "FULL"
+                            }
+                        ],
+                        "Next": "Generate Questions for Each Lesson"
+                        },
+                        "Generate Questions for Each Lesson": {
+                        "Type": "Map",
+                        "ItemProcessor": {
+                            "ProcessorConfig": {
+                            "Mode": "INLINE"
+                            },
+                            "StartAt": "Generate Questions",
+                            "States": {
+                            "Generate Questions": {
+                                "Type": "Task",
+                                "Resource": "arn:aws:states:::lambda:invoke",
+                                "OutputPath": "{% $states.result.Payload %}",
+                                "Parameters": {
+                                "FunctionName": self.generate_multiple_choice_questions_function.function_arn,
+                                "Payload": "{% $states.input %}"
+                                },
+                                "Retry": [
+                                {
+                                    "ErrorEquals": [
+                                    "Lambda.ServiceException",
+                                    "Lambda.AWSLambdaException",
+                                    "Lambda.SdkClientException",
+                                    "Lambda.TooManyRequestsException"
+                                    ],
+                                    "IntervalSeconds": 1,
+                                    "MaxAttempts": 3,
+                                    "BackoffRate": 2,
+                                    "JitterStrategy": "FULL"
+                                }
+                                ],
+                                "End": True
+                            }
+                            }
+                        },
+                        "Next": "Save MCQ State to DynamoDB"
+                        },
+                        "Save MCQ State to DynamoDB": {
+                        "Type": "Task",
+                        "Resource": "arn:aws:states:::lambda:invoke",
+                        "OutputPath": "{% $states.result.Payload %}",
+                        "Parameters": {
+                            "FunctionName": self.update_chapter_status_function.function_arn,
+                            "Payload": {
+                            "course_id": "{% $course_id %}",
+                            "user_id": "{% $user_id %}",
+                            "chapter_id": "{% $chapter_id %}",
+                            "status_type": "lessons",
+                            "new_status": "COMPLETED"
+                            }
+                        },
+                        "Retry": [
+                            {
+                            "ErrorEquals": [
+                                "Lambda.ServiceException",
+                                "Lambda.AWSLambdaException",
+                                "Lambda.SdkClientException",
+                                "Lambda.TooManyRequestsException"
+                            ],
+                            "IntervalSeconds": 1,
+                            "MaxAttempts": 3,
+                            "BackoffRate": 2,
+                            "JitterStrategy": "FULL"
+                            }
+                        ],
+                        "End": True
+                        }
+                    }
+                    }
+                ],
+                "End": True
                 }
-                }
-            ],
-            "End": True
+            },
+            "QueryLanguage": "JSONata"
             }
-        },
-        "QueryLanguage": "JSONata"
-        }
         
         step_function_definition_str = json.dumps(step_function_definition)
 

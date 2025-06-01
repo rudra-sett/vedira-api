@@ -542,7 +542,7 @@ class Functions(Construct): # Changed from Stack to Construct
                             "course_id": "{% $course_id %}",
                             "user_id": "{% $user_id %}",
                             "chapter_id": "{% $chapter_id %}",
-                            "status_type": "lessons",
+                            "status_type": "mcqs",
                             "new_status": "COMPLETED"
                             }
                         },

@@ -122,7 +122,8 @@ code blocks (e.g., ``` ```), inline code (e.g., ` `), blockquotes (e.g., >), and
 are correctly formatted according to standard markdown syntax.
 Return only the corrected markdown text, without any additional explanations or commentary.
 If the markdown is already correct, return the original text.
-Do not add new content or remove existing content, only fix the markdown syntax.
+If the provided text appears to be a section of a larger document and does not begin with a markdown header (e.g., #, ##, ###), please add an appropriate H2 header (e.g., "## Section Title") at the beginning of the text. Infer a suitable title from the content if one is not obvious.
+Do not add new content or remove existing content, only fix the markdown syntax and ensure a header exists.
 """
     for section_id, section_content in lesson_dict.items():
         if not isinstance(section_content, str) or not section_content.strip():
@@ -135,8 +136,26 @@ Do not add new content or remove existing content, only fix the markdown syntax.
             # Using a potentially faster/cheaper model for markdown fixing
             model_output = call_model(system_prompt, section_content, model='gemini-2.5-flash') 
             if model_output and 'content' in model_output:
-                corrected_content = model_output['content']
-                fixed_lesson_dict[section_id] = corrected_content
+                content_to_fix = model_output['content']
+                corrected_content = "" # Initialize
+
+                # Pattern 1: ```markdown\n{content}\n```
+                if content_to_fix.startswith("```markdown\n") and content_to_fix.endswith("\n```"):
+                    corrected_content = content_to_fix[len("```markdown\n"):-len("\n```")]
+                # Pattern 2: ```\n{content}\n``` (handles cases where LLM adds newlines inside the backticks)
+                elif content_to_fix.startswith("```\n") and content_to_fix.endswith("\n```"):
+                    corrected_content = content_to_fix[len("```\n"):-len("\n```")]
+                # Pattern 3: ```{content}``` (no newlines immediately after/before backticks, content might be multi-line)
+                elif content_to_fix.startswith("```") and content_to_fix.endswith("```"):
+                    corrected_content = content_to_fix[3:-3]
+                # Pattern 4: `{content}` (single backticks)
+                elif content_to_fix.startswith("`") and content_to_fix.endswith("`"):
+                    corrected_content = content_to_fix[1:-1]
+                else:
+                    corrected_content = content_to_fix # No stripping needed
+                
+                # Final strip for any leading/trailing whitespace that might remain or be part of the content itself.
+                fixed_lesson_dict[section_id] = corrected_content.strip()
                 print(f"Markdown fixed for section: {section_id}")
             else:
                 print(f"Error: call_model did not return expected output for markdown fixing of section {section_id}. Using original content.")

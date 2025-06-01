@@ -469,7 +469,7 @@ class Functions(Construct): # Changed from Stack to Construct
                         "Mark MCQs as Generating": {
                         "Type": "Task",
                         "Resource": "arn:aws:states:::lambda:invoke",
-                        "Output": "{% $states.result.Payload %}",
+                        "Output": "{% $states.input %}",
                         "Arguments": {
                             "FunctionName": self.update_chapter_status_function.function_arn,
                             "Payload": {

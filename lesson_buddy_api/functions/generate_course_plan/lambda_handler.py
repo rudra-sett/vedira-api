@@ -4,6 +4,7 @@ from urllib import request, parse
 import base64
 import uuid
 import os
+import datetime
 
 def lambda_handler(event, context):
     try:
@@ -23,13 +24,20 @@ def lambda_handler(event, context):
         course_plan['CourseID'] = str(uuid.uuid4())
         course_plan['UserID'] = user_id
 
-        print(course_plan)
-
-        # set completed, generated to false for every lesson
+        # Initialize chapter statuses
+        chapters_status = {}
+        timestamp = datetime.datetime.utcnow().isoformat()
         for chapter in course_plan['chapters']:
-            for lesson in chapter['lessons']:
-                lesson['completed'] = False
-                lesson['generated'] = False
+            chapter_id = chapter.get('id')
+            if chapter_id: # Ensure chapter has an ID
+                chapters_status[chapter_id] = {
+                    'lessons_status': 'PENDING',
+                    'mcqs_status': 'PENDING',
+                    'last_updated': timestamp
+                }
+        course_plan['chapters_status'] = chapters_status
+
+        print(course_plan)
         
         # save to dynamodb
         dynamodb = boto3.resource('dynamodb')

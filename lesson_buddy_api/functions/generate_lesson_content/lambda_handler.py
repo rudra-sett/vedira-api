@@ -160,6 +160,12 @@ def main_agent(course_plan, lesson_data, chapter_info):
     global generation_counts
     global assessment_count
 
+    # Reset state for the current lesson generation task
+    # This is crucial for Lambda warm starts to avoid state leakage.
+    lesson_sections = {}
+    generation_counts = {}
+    assessment_count = 0
+
     # main agentic loop
     # it is instructed to create a list of requirements of the topic
     # then ask the sub-agent to generate the lesson content
@@ -250,23 +256,23 @@ def main_agent(course_plan, lesson_data, chapter_info):
             },
             }
         },
-        # {
-        #     "type": "function",
-        #     "function": {
-        #     "name": "complete_lesson_generation",
-        #     "description": "If the assessor LLM tells you the all lesson content and sections are good, you will call this function to submit the lesson content. Use this ONLY when ALL lesson sections are finalized to satisfaction.",
-        #     "parameters": {
-        #         "type": "object",
-        #         "properties": {
-        #         "complete_reason": {
-        #             "type": "string",
-        #             "description": "Simply state that the full lesson was approved and tell how many re-evaluations it took.",
-        #         },                
-        #         },
-        #         "required": ["complete_reason"],
-        #     },
-        #     }
-        # },
+        { # Uncommented the complete_lesson_generation tool
+            "type": "function",
+            "function": {
+            "name": "complete_lesson_generation",
+            "description": "If the assessor LLM tells you the all lesson content and sections are good, you will call this function to submit the lesson content. Use this ONLY when ALL lesson sections are finalized to satisfaction.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                "complete_reason": {
+                    "type": "string",
+                    "description": "Simply state that the full lesson was approved and tell how many re-evaluations it took.",
+                },                
+                },
+                "required": ["complete_reason"],
+            },
+            }
+        },
         
     ]
 
@@ -275,23 +281,37 @@ def main_agent(course_plan, lesson_data, chapter_info):
     completed = False    
     start_prompt = f"Please proceed with the lesson generation."
     messages = []
+    
+    # Retry configuration for main_agent's call_model
+    main_agent_max_retries = 3
+    main_agent_retry_delay = 5  # seconds
+
     while not completed:
         print(start_prompt)
-        output = call_model(system_prompt,
-        prompt = start_prompt,
-        messages = messages,
-        model='gemini-2.5-flash',
-        tools=tools)
+        output = None # Initialize output to None before retry loop
+
+        for attempt in range(main_agent_max_retries):
+            output = call_model(
+                system_prompt,
+                prompt=start_prompt,
+                messages=messages,
+                model='gemini-2.5-flash',
+                tools=tools
+            )
+            if output is not None:
+                break  # Successful call, exit retry loop
+            else:
+                print(f"Warning: call_model returned None in main_agent (Attempt {attempt + 1}/{main_agent_max_retries}). Retrying in {main_agent_retry_delay}s...")
+                time.sleep(main_agent_retry_delay)
         
         # fix prompt in case it was changed by something
         start_prompt = f"Please proceed with the lesson generation."
 
         if output is None:
-            print("Error: call_model returned None in main_agent. Aborting.")
-            # Potentially return an error state or raise an exception
-            raise Exception("call_model returned None in main_agent. Aborting.")
+            # All retries in main_agent failed
+            print(f"Error: call_model returned None in main_agent after {main_agent_max_retries} attempts. Aborting.")
+            raise Exception(f"call_model returned None in main_agent after {main_agent_max_retries} attempts. Aborting.")
                 
-
         messages.append(output)
         tool_result = None # Initialize tool_result
 
@@ -301,9 +321,11 @@ def main_agent(course_plan, lesson_data, chapter_info):
                 args = json.loads(tool_call['function']['arguments'])
                 if tool_call['function']['name'] == 'generate_lesson_content':
                     tool_result = generate_lesson_content(**args)
-                    if generation_counts[args['lesson_section']] >= 3:
-                        print(f"Warning: Section {args['lesson_section']} has been generated {generation_counts[args['lesson_section']]} times.")
-                        start_prompt = f"Please finalize the lesson content for section {args['lesson_section']} as it has been generated {generation_counts[args['lesson_section']]} times. Ensure it meets the requirements, please do not keep generating it."
+                    # Use .get() for safer access to generation_counts
+                    current_gen_count = generation_counts.get(args['lesson_section'], 0)
+                    if current_gen_count >= 3:
+                        print(f"Warning: Section {args['lesson_section']} has been generated {current_gen_count} times.")
+                        start_prompt = f"Please finalize the lesson content for section {args['lesson_section']} as it has been generated {current_gen_count} times. Ensure it meets the requirements, please do not keep generating it."
                 elif tool_call['function']['name'] == 'assess_lesson_content':
                     assessment_count += 1
                     assessment = assess_lesson_content(**args)
@@ -332,13 +354,17 @@ def main_agent(course_plan, lesson_data, chapter_info):
                 # If the lesson is complete, we can break out of the loop
                 start_prompt = f"You have not generated any lesson sections yet. Please start generating the lesson content using the generate_lesson_content tool."
             elif assessment_count == 0:
-                start_prompt = f"You have not assessed any lesson sections yet. Please start assessing the lesson content using the assess_lesson_content tool."
+                start_prompt = f"You have generated lesson sections but none have been assessed yet. Please use the assess_lesson_content tool."
             else:
-                print("No tool calls found in output. Assuming lesson generation is complete.")
-                # If no tool calls, we assume the lesson is complete
-                # This might be a good place to check if the lesson is actually complete
-                # For now, we will just break out of the loop
-                completed = True            
+                # If sections are generated and assessed, but no tool call, prompt the LLM to decide the next step.
+                print("No tool calls found in output. Prompting LLM for next action or completion.")
+                start_prompt = (
+                    "You have generated and assessed some lesson sections. "
+                    "Please either continue by generating more sections, assessing existing ones, "
+                    "re-generating sections based on feedback, or use the 'complete_lesson_generation' tool "
+                    "if you believe the entire lesson is now complete and satisfactory."
+                )
+                # Do not set completed = True here; wait for explicit complete_lesson_generation call.
     return lesson_sections
 
 
@@ -397,4 +423,3 @@ def assess_lesson_content(prompt):
     except Exception as e:
         print(f"Error in assess_lesson_content: {e}")
         return f"Error during assessment: {e}"
-

@@ -295,7 +295,7 @@ def main_agent(course_plan, lesson_data, chapter_info):
                 system_prompt,
                 prompt=start_prompt,
                 messages=messages,
-                model='gemini-2.5-flash',
+                model='gemini-2.0-flash',
                 tools=tools
             )
             if output is not None:
@@ -384,7 +384,7 @@ def generate_lesson_content(prompt,lesson_section):
         Make sure to just output the lesson content, no additional niceties or metadata.
     """
     try:
-        model_output = call_model(system_prompt, prompt,model='gemini-2.5-flash')
+        model_output = call_model(system_prompt, prompt,model='gemini-2.0-flash')
         if model_output and 'content' in model_output:
             lesson_gen_output = model_output['content']
             lesson_sections[lesson_section] = lesson_gen_output
@@ -414,7 +414,7 @@ def assess_lesson_content(prompt):
         Please be concise, however. 
     """
     try:
-        model_output = call_model(system_prompt, prompt,model='gemini-2.5-flash')
+        model_output = call_model(system_prompt, prompt,model='gemini-2.0-flash')
         if model_output and 'content' in model_output:
             return model_output['content']
         else:

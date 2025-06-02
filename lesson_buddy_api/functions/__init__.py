@@ -432,7 +432,47 @@ class Functions(Construct): # Changed from Stack to Construct
                     }
                 },
                 "Next": "Parallel",
-                "Items": "{% $states.input.lessons %}"
+                "Items": "{% $states.input.lessons %}",
+                "Catch": [
+                    {
+                    "ErrorEquals": [
+                        "States.TaskFailed",
+                        "Exception",
+                        "States.Timeout"
+                    ],
+                    "Next": "Save FAILED State to DynamoDB"
+                    }
+                ]
+                },
+                "Save FAILED State to DynamoDB": {
+                "Type": "Task",
+                "Resource": "arn:aws:states:::lambda:invoke",
+                "Output": "{% $states.result.Payload %}",
+                "Arguments": {
+                    "FunctionName": f"{self.update_chapter_status_function.function_arn}:$LATEST",
+                    "Payload": {
+                    "course_id": "{% $course_id %}",
+                    "user_id": "{% $user_id %}",
+                    "chapter_id": "{% $chapter_id %}",
+                    "status_type": "lessons",
+                    "new_status": "FAILED"
+                    }
+                },
+                "Retry": [
+                    {
+                    "ErrorEquals": [
+                        "Lambda.ServiceException",
+                        "Lambda.AWSLambdaException",
+                        "Lambda.SdkClientException",
+                        "Lambda.TooManyRequestsException"
+                    ],
+                    "IntervalSeconds": 1,
+                    "MaxAttempts": 3,
+                    "BackoffRate": 2,
+                    "JitterStrategy": "FULL"
+                    }
+                ],
+                "End": True
                 },
                 "Parallel": {
                 "Type": "Parallel",
@@ -545,7 +585,47 @@ class Functions(Construct): # Changed from Stack to Construct
                             }
                             }
                         },
-                        "Next": "Save MCQ State to DynamoDB"
+                        "Next": "Save MCQ State to DynamoDB",
+                        "Catch": [
+                            {
+                            "ErrorEquals": [
+                                "States.Timeout",
+                                "States.TaskFailed",
+                                "Execution"
+                            ],
+                            "Next": "Save FAILED MCQ State to DynamoDB"
+                            }
+                        ]
+                        },
+                        "Save FAILED MCQ State to DynamoDB": {
+                        "Type": "Task",
+                        "Resource": "arn:aws:states:::lambda:invoke",
+                        "Output": "{% $states.result.Payload %}",
+                        "Arguments": {
+                            "FunctionName": f"{self.update_chapter_status_function.function_arn}:$LATEST",
+                            "Payload": {
+                            "course_id": "{% $course_id %}",
+                            "user_id": "{% $user_id %}",
+                            "chapter_id": "{% $chapter_id %}",
+                            "status_type": "mcqs",
+                            "new_status": "FAILED"
+                            }
+                        },
+                        "Retry": [
+                            {
+                            "ErrorEquals": [
+                                "Lambda.ServiceException",
+                                "Lambda.AWSLambdaException",
+                                "Lambda.SdkClientException",
+                                "Lambda.TooManyRequestsException"
+                            ],
+                            "IntervalSeconds": 1,
+                            "MaxAttempts": 3,
+                            "BackoffRate": 2,
+                            "JitterStrategy": "FULL"
+                            }
+                        ],
+                        "End": True
                         },
                         "Save MCQ State to DynamoDB": {
                         "Type": "Task",

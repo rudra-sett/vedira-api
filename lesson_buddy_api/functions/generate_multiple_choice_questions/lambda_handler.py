@@ -134,7 +134,8 @@ def generate_questions_from_content(lesson_content_markdown: str) -> List[Dict[s
     You are an expert in creating educational assessments. Based on the provided lesson content,
     generate a list of 10 multiple-choice questions. Each question should have exactly 4 options,
     a single correct answer (which must be one of the provided options), and a brief explanation for why that answer is correct.
-    Ensure the questions accurately test understanding of the key concepts in the lesson.
+    The explanation should discuss the key concepts from the lesson content that the question is testing, do not simply state that the answer is in the lesson content.
+    Ensure the questions accurately test understanding of the key concepts in the lesson, not just recall of facts. Emphasize critical thinking and application of knowledge, not just knowledge itself.
     Output the questions in the specified JSON format.
     """
     user_prompt = f"Here is the lesson content:\n\n{lesson_content_markdown}\n\nPlease generate 10 multiple-choice questions based on this content."

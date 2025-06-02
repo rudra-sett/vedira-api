@@ -8,28 +8,32 @@ import os
 def get_api_info(model):
     if model == 'gemini-2.5-flash':
         url = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'
-        api_key = os.environ.get('API_KEY') # Use .get for safety
-        if not api_key:
-            raise ValueError("API_KEY environment variable not set.")
+        api_key = os.environ['API_KEY']
         return url, api_key, 'gemini-2.5-flash-preview-04-17'
     if model == 'gemini-2.5-pro':
         url = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'
-        api_key = os.environ.get('API_KEY') # Use .get for safety
-        if not api_key:
-            raise ValueError("API_KEY environment variable not set.")
+        api_key = os.environ['API_KEY']
         return url, api_key, 'gemini-2.5-pro-preview-05-06'
     if model == 'claude-4-sonnet':
         url = 'http://Bedroc-Proxy-xVtSm3tV6xYe-1727257641.us-east-1.elb.amazonaws.com/api/v1/chat/completions'
-        api_key = os.environ.get('BEDROCK_API_KEY') # Use .get for safety
-        if not api_key:
-            raise ValueError("BEDROCK_API_KEY environment variable not set.")
+        api_key = os.environ['BEDROCK_API_KEY']
         return url, api_key, 'us.anthropic.claude-sonnet-4-20250514-v1:0'
     if model == 'claude-3.7-sonnet':
         url = 'http://Bedroc-Proxy-xVtSm3tV6xYe-1727257641.us-east-1.elb.amazonaws.com/api/v1/chat/completions'
-        api_key = os.environ.get('BEDROCK_API_KEY') # Use .get for safety
-        if not api_key:
-            raise ValueError("BEDROCK_API_KEY environment variable not set.")
+        api_key = os.environ['BEDROCK_API_KEY']
         return url, api_key, 'us.anthropic.claude-3-7-sonnet-20250219-v1:0'
+    if model == 'claude-3.5-haiku':
+        url = 'http://Bedroc-Proxy-xVtSm3tV6xYe-1727257641.us-east-1.elb.amazonaws.com/api/v1/chat/completions'
+        api_key = os.environ['BEDROCK_API_KEY']
+        return url, api_key, 'us.anthropic.claude-3-5-haiku-20241022-v1:0'
+    if model == 'gemini-2.0-flash':
+        url = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'
+        api_key = os.environ['API_KEY']
+        return url, api_key, 'gemini-2.0-flash-001'
+    if model == 'gemini-2.0-flash-lite':
+        url = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'
+        api_key = os.environ['API_KEY']
+        return url, api_key, 'gemini-2.0-flash-lite-001'
     raise ValueError(f"Unsupported model: {model}")
 
 def call_model(system_prompt, prompt, messages=None, output_format=None, tools=None, model='gemini-2.5-flash'):
@@ -122,8 +126,8 @@ code blocks (e.g., ``` ```), inline code (e.g., ` `), blockquotes (e.g., >), and
 are correctly formatted according to standard markdown syntax.
 Return only the corrected markdown text, without any additional explanations or commentary.
 If the markdown is already correct, return the original text.
-If the provided text appears to be a section of a larger document and does not begin with a markdown header (e.g., #, ##, ###), please add an appropriate H2 header (e.g., "## Section Title") at the beginning of the text. Infer a suitable title from the content if one is not obvious. Make sure not to include the section number in the header.
-Do not add new content or remove existing content, only fix the markdown syntax and ensure a header exists. If there is an H1 header, please replace it with an H2 header.
+If the provided text appears to be a section of a larger document and does not begin with a markdown header (e.g., #, ##, ###), please add an appropriate H2 header (e.g., "## Section Title") at the beginning of the text. Infer a suitable title from the content if one is not obvious. Make sure not to include the section number in the header. If there is an H1 header, please replace it with an H2 header.
+Finally, if any content appears incomplete, please ensure it is complete and coherent, as if it were a standalone section of a lesson. Only add what is necessary to make it complete, without altering the original meaning or intent of the content.
 """
     for section_id, section_content in lesson_dict.items():
         if not isinstance(section_content, str) or not section_content.strip():
@@ -134,7 +138,7 @@ Do not add new content or remove existing content, only fix the markdown syntax 
         print(f"Attempting to fix markdown for section: {section_id}")
         try:
             # Using a potentially faster/cheaper model for markdown fixing
-            model_output = call_model(system_prompt, section_content, model='gemini-2.5-flash') 
+            model_output = call_model(system_prompt, section_content, model='gemini-2.5-pro') 
             if model_output and 'content' in model_output:
                 content_to_fix = model_output['content']
                 corrected_content = "" # Initialize

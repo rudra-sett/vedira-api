@@ -58,16 +58,44 @@ def lambda_handler(event, context):
     if not table_name:
         raise ValueError("COURSE_TABLE_NAME environment variable not set.")
     table = dynamodb.Table(table_name)
-    # get item with key and sort key
-    item = table.get_item(Key={'CourseID': course_id, 'UserID': user_id})
-    course = item['Item']    
+    
+    try:
+        item_response = table.get_item(Key={'CourseID': course_id, 'UserID': user_id})
+    except Exception as e: # Consider more specific boto3 client errors
+        print(f"Error getting item from DynamoDB: {str(e)}")
+        return {
+            'statusCode': 500,
+            'body': json.dumps({'error': f'Could not retrieve course data: {str(e)}'})
+        }
+
+    if 'Item' not in item_response:
+        return {
+            'statusCode': 404,
+            'body': json.dumps({'error': f'Course with ID {course_id} not found for user.'})
+        }
+    
+    course_data = item_response['Item']
         
     if chapter_id:
-        for chapter in course['chapters']:
-            if chapter['id'] == chapter_id:
-                course = chapter
-                break
-    return {
-        'statusCode': 200,
-        'body': json.dumps(course)
-    }
+        found_chapter = None
+        if 'chapters' in course_data and isinstance(course_data['chapters'], list):
+            for chapter in course_data['chapters']:
+                if isinstance(chapter, dict) and chapter.get('id') == chapter_id:
+                    found_chapter = chapter
+                    break
+        
+        if found_chapter:
+            return {
+                'statusCode': 200,
+                'body': json.dumps(found_chapter)
+            }
+        else:
+            return {
+                'statusCode': 404,
+                'body': json.dumps({'error': f'Chapter with ID {chapter_id} not found in course {course_id}.'})
+            }
+    else: # No chapter_id requested, return the whole course
+        return {
+            'statusCode': 200,
+            'body': json.dumps(course_data)
+        }

@@ -2,6 +2,7 @@ import json
 import boto3
 import os
 import base64
+from botocore.exceptions import ClientError # For DynamoDB specific errors
 
 sfn_client = boto3.client('stepfunctions')
 dynamodb_resource = boto3.resource('dynamodb')
@@ -57,33 +58,62 @@ def handler(event, context):
         
         # --- Check Step Function Status (if executionArn is provided) ---
         if event_execution_arn:
-            sfn_response = sfn_client.describe_execution(
-                executionArn=event_execution_arn
-            )
-            sfn_status = sfn_response.get('status')
-            sfn_output_str = sfn_response.get('output')
+            try:
+                sfn_response = sfn_client.describe_execution(
+                    executionArn=event_execution_arn
+                )
+                sfn_status = sfn_response.get('status')
+                sfn_output_str = sfn_response.get('output')
 
-            sfn_is_complete = sfn_status == 'SUCCEEDED'
-            sfn_is_failed = sfn_status == 'FAILED' or sfn_status == 'TIMED_OUT' or sfn_status == 'ABORTED'
+                sfn_is_complete = sfn_status == 'SUCCEEDED'
+                sfn_is_failed = sfn_status == 'FAILED' or sfn_status == 'TIMED_OUT' or sfn_status == 'ABORTED'
 
-            result['step_function_details'] = {
-                'execution_arn': event_execution_arn,
-                'status': sfn_status,
-                'is_complete': sfn_is_complete,
-                'is_failed': sfn_is_failed,
-            }
-            if sfn_is_complete and sfn_output_str:
-                try:
-                    result['step_function_details']['output'] = json.loads(sfn_output_str)
-                except json.JSONDecodeError:
-                    result['step_function_details']['output'] = sfn_output_str
-            elif sfn_is_failed:
-                error_details = sfn_response.get('error')
-                cause_details = sfn_response.get('cause')
-                if error_details:
-                    result['step_function_details']['error'] = error_details
-                if cause_details:
-                    result['step_function_details']['cause'] = cause_details
+                result['step_function_details'] = {
+                    'execution_arn': event_execution_arn,
+                    'status': sfn_status,
+                    'is_complete': sfn_is_complete,
+                    'is_failed': sfn_is_failed,
+                }
+                if sfn_is_complete and sfn_output_str:
+                    try:
+                        result['step_function_details']['output'] = json.loads(sfn_output_str)
+                    except json.JSONDecodeError:
+                        result['step_function_details']['output'] = sfn_output_str # Keep as string if not JSON
+                elif sfn_is_failed:
+                    error_details = sfn_response.get('error')
+                    cause_details = sfn_response.get('cause')
+                    if error_details:
+                        result['step_function_details']['error'] = error_details
+                    if cause_details:
+                        result['step_function_details']['cause'] = cause_details
+            
+            except sfn_client.exceptions.ExecutionDoesNotExist:
+                print(f"Step Functions ExecutionDoesNotExist for ARN: {event_execution_arn}")
+                result['step_function_details'] = {
+                    'execution_arn': event_execution_arn,
+                    'status': 'NOT_FOUND',
+                    'error': 'Execution ARN not found.',
+                    'is_complete': False,
+                    'is_failed': True # Treat as failed for status checking purposes
+                }
+            except sfn_client.exceptions.InvalidArn:
+                print(f"Step Functions InvalidArn: {event_execution_arn}")
+                result['step_function_details'] = {
+                    'execution_arn': event_execution_arn,
+                    'status': 'INVALID_ARN',
+                    'error': 'The provided execution ARN is invalid.',
+                    'is_complete': False,
+                    'is_failed': True
+                }
+            except Exception as sfn_e: # Catch other SFN client errors
+                print(f"Error describing Step Function execution {event_execution_arn}: {sfn_e}")
+                result['step_function_details'] = {
+                    'execution_arn': event_execution_arn,
+                    'status': 'ERROR',
+                    'error': f"Could not retrieve Step Function status: {str(sfn_e)}",
+                    'is_complete': False,
+                    'is_failed': True
+                }
         
         # --- Check Chapter Statuses from DynamoDB (if all IDs are provided) ---
         if event_course_id and event_user_id and event_chapter_id:
@@ -115,9 +145,14 @@ def handler(event, context):
                         'mcqs_status': mcqs_status,
                         'last_updated': last_updated
                     }
-                except Exception as db_e:
-                    print(f"Error fetching from DynamoDB: {db_e}")
-                    result['chapter_generation_status'] = { # Store error within this key
+                except ClientError as db_e:
+                    print(f"DynamoDB ClientError fetching chapter status: {db_e}")
+                    result['chapter_generation_status'] = {
+                        'error': f"DynamoDB error fetching chapter statuses: {db_e.response.get('Error', {}).get('Code', 'UnknownError')}"
+                    }
+                except Exception as db_e: # Catch any other unexpected errors during DB interaction
+                    print(f"Unexpected error fetching from DynamoDB: {db_e}")
+                    result['chapter_generation_status'] = {
                         'error': f"Could not fetch chapter statuses from DynamoDB: {str(db_e)}"
                     }
         

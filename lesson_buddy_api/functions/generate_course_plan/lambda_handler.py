@@ -5,6 +5,8 @@ import base64
 import uuid
 import os
 import datetime
+from botocore.exceptions import ClientError # For DynamoDB error handling
+from urllib import error as urllib_error # For call_model HTTP errors
 
 def lambda_handler(event, context):
     try:
@@ -39,16 +41,37 @@ def lambda_handler(event, context):
             if not user_id:
                 return {
                     'statusCode': 400,
-                    'body': json.dumps({'error': 'User ID (sub) not found in token'})
+                    'body': json.dumps({'error': 'User ID (sub) not found in token'}),
+                    'headers': {'Content-Type': 'application/json', "Access-Control-Allow-Origin": "*"}
                 }
         except Exception as e:
             print(f"Error decoding token or extracting sub: {str(e)}")
             return {
                 'statusCode': 401,
-                'body': json.dumps({'error': f'Invalid token: {str(e)}'})
+                'body': json.dumps({'error': f'Invalid token: {str(e)}'}),
+                'headers': {'Content-Type': 'application/json', "Access-Control-Allow-Origin": "*"}
             }
 
-        course_plan = json.loads(generate_course_plan(topic, timeline, difficulty, custom_instructions)) # type: ignore
+        try:
+            course_plan_str = generate_course_plan(topic, timeline, difficulty, custom_instructions)
+            if course_plan_str is None: # call_model now returns None on error
+                 raise ValueError("Failed to generate course plan from LLM: Received no content.")
+            course_plan = json.loads(course_plan_str) 
+        except json.JSONDecodeError as e: # Catch this more specific error first
+            print(f"JSONDecodeError parsing LLM output: {str(e)}")
+            return {
+                'statusCode': 502,
+                'body': json.dumps({'error': f'Failed to parse course plan from LLM: Invalid JSON format. {str(e)}'}),
+                'headers': {'Content-Type': 'application/json', "Access-Control-Allow-Origin": "*"}
+            }
+        except ValueError as e: # Catch other ValueErrors, including the one raised above
+            print(f"Error generating or parsing course plan: {str(e)}")
+            return {
+                'statusCode': 502, # Bad Gateway, as we failed to get a valid response from upstream (LLM)
+                'body': json.dumps({'error': f'Failed to generate or parse course plan from LLM: {str(e)}'}),
+                'headers': {'Content-Type': 'application/json', "Access-Control-Allow-Origin": "*"}
+            }
+        
         course_plan['CourseID'] = str(uuid.uuid4())
         course_plan['UserID'] = user_id
 
@@ -70,29 +93,42 @@ def lambda_handler(event, context):
         # save to dynamodb
         dynamodb = boto3.resource('dynamodb')
         table_name = os.environ.get('COURSE_TABLE_NAME')
-        if not table_name:
-            raise ValueError("COURSE_TABLE_NAME environment variable not set.")
+        # Assuming COURSE_TABLE_NAME is guaranteed by CDK as per user feedback
         table = dynamodb.Table(table_name) # type: ignore
-        table.put_item(Item=course_plan)
-        print('Saved to DynamoDB')
+        
+        try:
+            table.put_item(Item=course_plan)
+            print('Saved to DynamoDB')
+        except ClientError as e:
+            print(f"Error saving to DynamoDB: {str(e)}")
+            return {
+                'statusCode': 500,
+                'body': json.dumps({'error': f'Could not save course plan to database: {str(e)}'}),
+                'headers': {'Content-Type': 'application/json', "Access-Control-Allow-Origin": "*"}
+            }
 
         return {
             'statusCode': 200,
-            'body': json.dumps(course_plan)
+            'body': json.dumps(course_plan),
+            'headers': {'Content-Type': 'application/json', "Access-Control-Allow-Origin": "*"}
         }
-    except Exception as e:
-        print(e)        
+    except Exception as e: # Catch-all for any other unexpected errors
+        print(f"Unexpected error in lambda_handler: {str(e)}")        
         return {
-            'statusCode': 200,
-            'body': call_model(f'Please output a debug message based on this error: {e}')
+            'statusCode': 500,
+            'body': json.dumps({'error': f'An unexpected server error occurred: {str(e)}'}),
+            'headers': {'Content-Type': 'application/json', "Access-Control-Allow-Origin": "*"}
         }
 
-
-url = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'
-api_key = os.environ.get('API_KEY', '')
-headers = {'Content-Type': 'application/json', 'Authorization' : f'Bearer {api_key}'}
-
-def call_model(prompt,output_format = None):
+def call_model(prompt, output_format=None):
+    api_key = os.environ.get('API_KEY')
+    if not api_key:
+        # This check is important here as call_model is a standalone utility
+        print("Error in call_model: API_KEY environment variable not set.")
+        # Return None, lambda_handler will catch this and raise ValueError
+        return None 
+        
+    url = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'
     data = {
         "model": "gemini-2.5-pro-preview-05-06",
         "messages": [{"role": "user", "content": prompt}]
@@ -118,13 +154,32 @@ def call_model(prompt,output_format = None):
     
     try:
         with request.urlopen(req) as resp:
-            content = resp.read()
-            print(content.decode('utf-8'))
-            output = json.loads(content)
-            print(output)
-            return output['choices'][0]['message']['content']
-    except Exception as e:
-        print(f"Error: {e}")
+            if resp.status == 200:
+                content = resp.read()
+                output = json.loads(content)
+                if output.get('choices') and output['choices'][0].get('message') and 'content' in output['choices'][0]['message']:
+                    return output['choices'][0]['message']['content']
+                else:
+                    print(f"LLM response missing expected structure: {output}")
+                    # Return None, lambda_handler will catch this
+                    return None
+            else:
+                error_content = resp.read().decode('utf-8')
+                print(f"LLM API HTTP Error: {resp.status} - {resp.reason}. Response: {error_content}")
+                return None # Indicate failure
+                
+    except urllib_error.HTTPError as e:
+        error_body = e.read().decode('utf-8') if e.fp else str(e)
+        print(f"HTTPError calling LLM: {e.code} - {e.reason}. Body: {error_body}")
+        return None
+    except urllib_error.URLError as e:
+        print(f"URLError calling LLM: {e.reason}")
+        return None
+    except json.JSONDecodeError as e:
+        print(f"JSONDecodeError parsing LLM response: {e}")
+        return None
+    except Exception as e: 
+        print(f"Unexpected error in call_model: {e}")
         return None
 
 course_plan_schema = {

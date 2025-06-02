@@ -1,6 +1,7 @@
 import json
 import os
 import boto3
+from botocore.exceptions import ClientError
 import datetime
 import base64
 import json # Already imported but good to ensure
@@ -65,17 +66,31 @@ def lambda_handler(event, context):
             Key={'CourseID': event_course_id, 'UserID': event_user_id},
             UpdateExpression=update_expression,
             ExpressionAttributeNames=expression_attribute_names,
-            ExpressionAttributeValues=expression_attribute_values
+            ExpressionAttributeValues=expression_attribute_values,
+            ConditionExpression="attribute_exists(CourseID) AND attribute_exists(UserID)" # Ensure the item exists
         )
 
         return {
             'statusCode': 200,
             'body': json.dumps({'message': f'Successfully updated {status_type} status for chapter {event_chapter_id} to {new_status}.'})
         }
-
+    
+    except ClientError as e:
+        if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
+            print(f"ConditionalCheckFailedException: Item with CourseID {event_course_id} and UserID {event_user_id} not found or condition failed.")
+            return {
+                'statusCode': 404,
+                'body': json.dumps({'error': f'Course with ID {event_course_id} for user {event_user_id} not found.'})
+            }
+        else:
+            print(f"DynamoDB ClientError: {str(e)}")
+            return {
+                'statusCode': 500,
+                'body': json.dumps({'error': f'DynamoDB error: {str(e)}'})
+            }
     except Exception as e:
         print(f"Error: {str(e)}")
         return {
             'statusCode': 500,
-            'body': json.dumps({'error': str(e)})
+            'body': json.dumps({'error': f'An unexpected error occurred: {str(e)}'})
         }

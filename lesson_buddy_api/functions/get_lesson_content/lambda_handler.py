@@ -2,8 +2,16 @@ import json
 import boto3
 import os
 import base64
+from botocore.exceptions import ClientError
 
 def lambda_handler(event, context):
+    
+    headers = {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*", # Add CORS headers for all responses
+        "Access-Control-Allow-Headers": "Content-Type,Authorization",
+        "Access-Control-Allow-Methods": "OPTIONS,POST,GET"
+    }
     
     try:
         data = event["queryStringParameters"]
@@ -23,7 +31,8 @@ def lambda_handler(event, context):
         if not auth_header or not auth_header.startswith('Bearer '):
             return {
                 'statusCode': 401,
-                'body': json.dumps({'error': 'Missing or malformed Authorization header'})
+                'body': json.dumps({'error': 'Missing or malformed Authorization header'}),
+                'headers': headers
             }
         
         token = auth_header.split(' ')[1]
@@ -36,42 +45,64 @@ def lambda_handler(event, context):
         if not user_id: # Still good to validate it was present in token
             return {
                 'statusCode': 400,
-                'body': json.dumps({'error': 'User ID (sub) not found in token'})
+                'body': json.dumps({'error': 'User ID (sub) not found in token'}),
+                'headers': headers
             }
     except Exception as e:
         print(f"Error decoding token or extracting sub: {str(e)}")
         return {
             'statusCode': 401,
-            'body': json.dumps({'error': f'Invalid token: {str(e)}'})
+            'body': json.dumps({'error': f'Invalid token: {str(e)}'}),
+            'headers': headers
         }
 
     if not all([course_id, chapter_id, lesson_id]):
         return {
             'statusCode': 400,
-            'body': json.dumps({'error': 'Missing required query string parameters: course_id, chapter_id, or lesson_id'})
+            'body': json.dumps({'error': 'Missing required query string parameters: course_id, chapter_id, or lesson_id'}),
+            'headers': headers
         }
 
     content_key = f'{course_id}-{chapter_id}-{lesson_id}.json'
     s3 = boto3.client('s3')
-
-    try:
-        bucket_name = os.environ.get('LESSON_BUCKET_NAME')
-        if not bucket_name:
-            raise ValueError("LESSON_BUCKET_NAME environment variable not set.")
-        response = s3.get_object(Bucket=bucket_name, Key=content_key)
-        content = response['Body'].read().decode('utf-8')
-        return {
-            'statusCode': 200,
-            'body': content
-        }
-    except s3.exceptions.NoSuchKey:
-        return {
-            'statusCode': 404,
-            'body': 'Content not found'
-        }
-    except Exception as e:
-        print(e)
+    
+    bucket_name = os.environ.get('LESSON_BUCKET_NAME')
+    if not bucket_name:
+        print("Error: LESSON_BUCKET_NAME environment variable not set.")
         return {
             'statusCode': 500,
-            'body': 'Some other error!'
+            'body': json.dumps({'error': 'Server configuration error: Lesson bucket name not set.'}),
+            'headers': headers
+        }
+
+    try:
+        response = s3.get_object(Bucket=bucket_name, Key=content_key)
+        content = response['Body'].read().decode('utf-8')
+        
+        return {
+            'statusCode': 200,
+            'body': content, 
+            'headers': headers 
+        }
+    except s3.exceptions.NoSuchKey:
+        # bucket_name is guaranteed to be set here due to the check above
+        print(f"Content not found in S3: s3://{bucket_name}/{content_key}")
+        return {
+            'statusCode': 404,
+            'body': json.dumps({'error': 'Lesson content not found.'}),
+            'headers': headers
+        }
+    except ClientError as e:
+        print(f"S3 ClientError getting lesson content: {str(e)}")
+        return {
+            'statusCode': 500, 
+            'body': json.dumps({'error': f'Failed to retrieve lesson content from S3: {str(e)}'}),
+            'headers': headers
+        }
+    except Exception as e: # Catch any other unexpected errors during S3 interaction or content processing
+        print(f"Unexpected error during S3 operation or content processing: {str(e)}")
+        return {
+            'statusCode': 500,
+            'body': json.dumps({'error': f'An unexpected error occurred: {str(e)}'}),
+            'headers': headers
         }

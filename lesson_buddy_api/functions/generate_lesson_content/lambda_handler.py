@@ -41,7 +41,7 @@ def get_api_info(model):
     if model == 'gemini-2.5-flash':
         url = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'
         api_key = os.environ['API_KEY']
-        return url, api_key, 'gemini-2.5-flash-preview-04-17'
+        return url, api_key, 'gemini-2.5-flash-preview-05-20'
     if model == 'gemini-2.5-pro':
         url = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'
         api_key = os.environ['API_KEY']

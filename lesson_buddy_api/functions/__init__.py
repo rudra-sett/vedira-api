@@ -124,6 +124,7 @@ class Functions(Construct): # Changed from Stack to Construct
             }
         )
         questions_bucket.grant_write(self.generate_multiple_choice_questions_function) # Added permissions
+        lesson_bucket.grant_read(self.generate_multiple_choice_questions_function) # Added read permission for lesson content
 
         # Add function to the stack from folder get_multiple_choice_questions
         self.get_multiple_choice_questions_function = _lambda.Function(

@@ -64,11 +64,19 @@ class LessonBuddyApiGateway(Construct):
                 credentials_role=api_gw_sfn_role,
                 passthrough_behavior=apigw.PassthroughBehavior.NEVER, # Important: process the template
                 request_templates={
-                    "application/json": json.dumps({
-                        # Properly escape the entire input as a JSON string
-                        "input": "'{\"course_id\": ' + $input.json('$.course_id') + ', \"chapter_id\": ' + $input.json('$.chapter_id') + ', \"user_id\": \"' + $context.authorizer.claims.sub + '\"}'",
-                        "stateMachineArn": generate_chapter_sfn.state_machine_arn
-                    })
+                    "application/json": (
+                        "#set($courseId = $input.path('$.course_id'))\n"
+                        "#set($chapterId = $input.path('$.chapter_id'))\n"
+                        "#set($userId = $context.authorizer.claims.sub)\n"
+                        "{\n"
+                        "  \"input\": \"$util.escapeJavaScript('{"
+                        + "\\\"course_id\\\": \\\"' + $courseId + '\\\", "
+                        + "\\\"chapter_id\\\": \\\"' + $chapterId + '\\\", "
+                        + "\\\"user_id\\\": \\\"' + $userId + '\\\""
+                        + "'')\",\n"
+                        f"  \"stateMachineArn\": \"{generate_chapter_sfn.state_machine_arn}\"\n"
+                        "}"
+                    )
                 },
                 integration_responses=[
                     apigw.IntegrationResponse(

@@ -153,10 +153,13 @@ def call_model(system_prompt, prompt, messages=None, output_format=None, tools=N
 
 lesson_sections = {}
 generation_counts = {}
+assessment_count = 0
 
 def main_agent(course_plan, lesson_data, chapter_info):
     global lesson_sections
     global generation_counts
+    global assessment_count
+
     # main agentic loop
     # it is instructed to create a list of requirements of the topic
     # then ask the sub-agent to generate the lesson content
@@ -198,7 +201,7 @@ def main_agent(course_plan, lesson_data, chapter_info):
     The chapter the lesson is a part of is called {chapter_info['title']}, which is described as "{chapter_info['description']}."
     
     Here is the information on the lesson you are creating and curating content for: {lesson_data}. Ensure all aspects of the lesson are addressed.    
-    The current lesson sections, if any, are: 
+    The current lesson sections keys, if any, are: 
     {current_sections_str}
     Only complete the lesson generation after ALL aspects and portions of the lesson are completed.
 
@@ -279,8 +282,8 @@ def main_agent(course_plan, lesson_data, chapter_info):
         model='gemini-2.5-flash',
         tools=tools)
         
-        # fix prompt in case it was changed by empty dict
-        # start_prompt = f"Please proceed with the lesson generation."
+        # fix prompt in case it was changed by something
+        start_prompt = f"Please proceed with the lesson generation."
 
         if output is None:
             print("Error: call_model returned None in main_agent. Aborting.")
@@ -297,9 +300,13 @@ def main_agent(course_plan, lesson_data, chapter_info):
                 args = json.loads(tool_call['function']['arguments'])
                 if tool_call['function']['name'] == 'generate_lesson_content':
                     tool_result = generate_lesson_content(**args)
+                    if generation_counts[args['lesson_section']] >= 3:
+                        print(f"Warning: Section {args['lesson_section']} has been generated {generation_counts[args['lesson_section']]} times.")
+                        start_prompt = f"Please finalize the lesson content for section {args['lesson_section']} as it has been generated {generation_counts[args['lesson_section']]} times. Ensure it meets the requirements, please do not keep generating it."
                 elif tool_call['function']['name'] == 'assess_lesson_content':
+                    assessment_count += 1
                     assessment = assess_lesson_content(**args)
-                    tool_result = assessment['content'] if assessment and 'content' in assessment else "Assessment error or no content."
+                    tool_result = assessment                    
                 elif tool_call['function']['name'] == 'complete_lesson_generation':
                     completed = True
                     break
@@ -322,8 +329,9 @@ def main_agent(course_plan, lesson_data, chapter_info):
             if len(lesson_sections) == 0:
                 # Let's double check one more time if the lesson is complete
                 # If the lesson is complete, we can break out of the loop
-                # start_prompt = ""
-                continue
+                start_prompt = f"You have not generated any lesson sections yet. Please start generating the lesson content by providing the first section's requirements."                
+            elif assessment_count < len(lesson_sections):
+                start_prompt = f"You have completed fewer assessments than sections. Please continue assessing the lesson content until all sections are assessed."
             else:
                 print("No tool calls found in output. Assuming lesson generation is complete.")
                 # If no tool calls, we assume the lesson is complete
@@ -337,21 +345,6 @@ def generate_lesson_content(prompt,lesson_section):
     global lesson_sections
     global generation_counts
 
-    lesson_content_schema = {
-        "type": "object",
-        "properties": {
-            "lesson_content": {
-                "type": "string",
-                "description": "The lesson content"
-            },
-            # "lesson_section": {
-            #     "type": "string",
-            #     "description": "The identifier for the lesson section. This will be provided by the user."
-            # }
-        },
-        "required": ["lesson_content"]#, "lesson_section"]
-    }
-    
     system_prompt = f"""
         You are an expert educator. Generate a portion of a lesson based on the instructions/topic the user provides you.
         In some cases, you may be asked to modify an existing portion of a lesson with some feedback. If that is the case,
@@ -369,6 +362,7 @@ def generate_lesson_content(prompt,lesson_section):
             lesson_gen_output = model_output['content']
             lesson_sections[lesson_section] = lesson_gen_output
             generation_counts[lesson_section] = generation_counts.get(lesson_section, 0) + 1
+            print(f"Generated content for section {lesson_section}, current generation count: {generation_counts[lesson_section]}, current word count: {len(lesson_gen_output.split())}")
             return f"Sucessfully generated content for section {lesson_section} and saved it, please call the assessor. The total word count of the lesson is {len(' '.join(lesson_sections.values()))}"
         else:
             print(f"Error: call_model did not return expected output for section {lesson_section}")
@@ -377,26 +371,29 @@ def generate_lesson_content(prompt,lesson_section):
         print(e)
         return f"Error generating lesson content: {e}"
 
-def assess_lesson_content(system_prompt):   
-    global lesson_sections
-    lesson_assessment_schema = {
-        "type": "object",
-        "properties": {            
-            "feedback": {
-                "type": "string",
-                "description": "The feedback of the lesson content."
-            },
-            "approved": {
-                "type": "boolean",
-                "description": "Whether the lesson content is approved."
-            }
-        },
-        "required": ["approved", "feedback"]
-    }
+def assess_lesson_content(prompt):   
+    global lesson_sections    
     
-    model_output = call_model(system_prompt, json.dumps(lesson_sections),model='gemini-2.5-flash')
-    if model_output:
-        return model_output
-    else:
-        print("Error: call_model returned None in assess_lesson_content.")
-        return {"feedback": "Error during assessment.", "approved": False}
+    system_prompt = f"""
+        You are an expert educator. You will be given a lesson content and you will assess it based on the requirements provided by the user.
+        This is the full lesson content you will be assessing:
+        ```
+        {json.dumps(lesson_sections)}
+        ```
+        The user will tell you which specific section of the lesson you are assessing, and you will provide feedback on that section.
+        Please provide detailed feedback on the content, including any areas that need improvement or additional information.
+        If the content is good, please approve it and say that it is good.
+        If the content is not good, please provide specific feedback on what needs to be improved and ask the content generator to re-generate it.
+        Please be concise, however. 
+    """
+    try:
+        model_output = call_model(system_prompt, prompt,model='gemini-2.5-flash')
+        if model_output and 'content' in model_output:
+            return model_output['content']
+        else:
+            print("Error: call_model returned None in assess_lesson_content.")
+            return "Error during assessment."
+    except Exception as e:
+        print(f"Error in assess_lesson_content: {e}")
+        return f"Error during assessment: {e}"
+

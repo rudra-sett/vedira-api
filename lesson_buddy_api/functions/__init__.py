@@ -300,6 +300,8 @@ class Functions(Construct): # Changed from Stack to Construct
                 "Retry": [
                     {
                     "ErrorEquals": [
+                        "States.TaskFailed",
+                        "Sandbox.Timedout",
                         "Lambda.ServiceException",
                         "Lambda.AWSLambdaException",
                         "Lambda.SdkClientException",
@@ -345,6 +347,8 @@ class Functions(Construct): # Changed from Stack to Construct
                 "Retry": [
                     {
                     "ErrorEquals": [
+                        "States.TaskFailed",
+                        "Sandbox.Timedout",
                         "Lambda.ServiceException",
                         "Lambda.AWSLambdaException",
                         "Lambda.SdkClientException",
@@ -383,6 +387,8 @@ class Functions(Construct): # Changed from Stack to Construct
                         "Retry": [
                         {
                             "ErrorEquals": [
+                            "States.TaskFailed",
+                            "Sandbox.Timedout",
                             "Lambda.ServiceException",
                             "Lambda.AWSLambdaException",
                             "Lambda.SdkClientException",
@@ -407,6 +413,8 @@ class Functions(Construct): # Changed from Stack to Construct
                         "Retry": [
                         {
                             "ErrorEquals": [
+                            "States.TaskFailed",
+                            "Sandbox.Timedout",
                             "Lambda.ServiceException",
                             "Lambda.AWSLambdaException",
                             "Lambda.SdkClientException",
@@ -448,6 +456,8 @@ class Functions(Construct): # Changed from Stack to Construct
                         "Retry": [
                             {
                             "ErrorEquals": [
+                                "States.TaskFailed",
+                                "Sandbox.Timedout",
                                 "Lambda.ServiceException",
                                 "Lambda.AWSLambdaException",
                                 "Lambda.SdkClientException",
@@ -483,6 +493,8 @@ class Functions(Construct): # Changed from Stack to Construct
                         "Retry": [
                             {
                             "ErrorEquals": [
+                                "States.TaskFailed",
+                                "Sandbox.Timedout",
                                 "Lambda.ServiceException",
                                 "Lambda.AWSLambdaException",
                                 "Lambda.SdkClientException",
@@ -515,6 +527,8 @@ class Functions(Construct): # Changed from Stack to Construct
                                 "Retry": [
                                 {
                                     "ErrorEquals": [
+                                    "States.TaskFailed",
+                                    "Sandbox.Timedout",
                                     "Lambda.ServiceException",
                                     "Lambda.AWSLambdaException",
                                     "Lambda.SdkClientException",
@@ -549,6 +563,8 @@ class Functions(Construct): # Changed from Stack to Construct
                         "Retry": [
                             {
                             "ErrorEquals": [
+                                "States.TaskFailed",
+                                "Sandbox.Timedout",
                                 "Lambda.ServiceException",
                                 "Lambda.AWSLambdaException",
                                 "Lambda.SdkClientException",

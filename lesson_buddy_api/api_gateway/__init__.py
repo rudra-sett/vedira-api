@@ -104,6 +104,8 @@ class LessonBuddyApiGateway(Construct):
         generate_chapter_resource.add_method(
             "POST",
             generate_chapter_integration,
+            authorizer=cognito_authorizer,
+            authorization_type=apigw.AuthorizationType.COGNITO,
             method_responses=[apigw.MethodResponse(
                 status_code="200",
                 response_parameters={
@@ -114,23 +116,48 @@ class LessonBuddyApiGateway(Construct):
 
         # /generate-lesson-plan
         generate_lesson_plan_resource = api.root.add_resource("generate-course-plan")
-        generate_lesson_plan_resource.add_method("POST", generate_lesson_plan_integration)
+        generate_lesson_plan_resource.add_method(
+            "POST", 
+            generate_lesson_plan_integration,
+            authorizer=cognito_authorizer,
+            authorization_type=apigw.AuthorizationType.COGNITO
+        )
 
         # /get-course-list
         get_course_list_resource = api.root.add_resource("get-course-list")
-        get_course_list_resource.add_method("GET", get_course_list_integration)
+        get_course_list_resource.add_method(
+            "GET", 
+            get_course_list_integration,
+            authorizer=cognito_authorizer,
+            authorization_type=apigw.AuthorizationType.COGNITO
+        )
 
         # /get-lesson-content
         get_lesson_content_resource = api.root.add_resource("get-lesson-content")
-        get_lesson_content_resource.add_method("GET", get_lesson_content_integration)
+        get_lesson_content_resource.add_method(
+            "GET", 
+            get_lesson_content_integration,
+            authorizer=cognito_authorizer,
+            authorization_type=apigw.AuthorizationType.COGNITO
+        )
 
         # /get-lesson-plan
         get_lesson_plan_resource = api.root.add_resource("get-course-plan")
-        get_lesson_plan_resource.add_method("GET", get_lesson_plan_integration)
+        get_lesson_plan_resource.add_method(
+            "GET", 
+            get_lesson_plan_integration,
+            authorizer=cognito_authorizer,
+            authorization_type=apigw.AuthorizationType.COGNITO
+        )
 
         # /check-chapter-generation-status
         check_chapter_status_resource = api.root.add_resource("check-chapter-generation-status")
-        check_chapter_status_resource.add_method("GET", check_chapter_generation_status_integration)
+        check_chapter_status_resource.add_method(
+            "GET", 
+            check_chapter_generation_status_integration,
+            authorizer=cognito_authorizer,
+            authorization_type=apigw.AuthorizationType.COGNITO
+        )
 
         # --- Authentication Endpoints ---
         # The /auth/login, /auth/callback, /auth/logout endpoints are removed
@@ -177,12 +204,9 @@ class LessonBuddyApiGateway(Construct):
         questions_resource = api.root.add_resource("questions")
         questions_resource.add_method(
             "GET",
-            get_multiple_choice_questions_integration,            
-            request_parameters={
-                "method.request.querystring.courseId": True,
-                "method.request.querystring.chapterId": True,
-                "method.request.querystring.lessonId": True
-            }
+            get_multiple_choice_questions_integration,
+            authorizer=cognito_authorizer,
+            authorization_type=apigw.AuthorizationType.COGNITO,            
         )
 
         self.api = api

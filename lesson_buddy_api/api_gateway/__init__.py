@@ -65,21 +65,11 @@ class LessonBuddyApiGateway(Construct):
                 passthrough_behavior=apigw.PassthroughBehavior.NEVER, # Important: process the template
                 request_templates={
                     "application/json": json.dumps({
-                        # VTL to construct the 'input' string for the Step Function:
-                        # 1. Parse the original request body.
-                        # 2. Create a new map (JSON object).
-                        # 3. Add 'course_id' and 'chapter_id' from the original body.
-                        # 4. Add 'user_id' from the Cognito authorizer context.
-                        # 5. Convert the new map to a JSON string and escape it.
-                        "input": f"""#set($body = $input.json('$'))
-#set($custom_input_map = {{}})
-#set($discard = $custom_input_map.put('course_id', $body.course_id))
-#set($discard = $custom_input_map.put('chapter_id', $body.chapter_id))
-#set($discard = $custom_input_map.put('user_id', '$context.authorizer.claims.sub'))
-$util.escapeJavaScript($util.toJson($custom_input_map))""",
+                        # Properly escape the entire input as a JSON string
+                        "input": "'{\"course_id\": ' + $input.json('$.course_id') + ', \"chapter_id\": ' + $input.json('$.chapter_id') + ', \"user_id\": \"' + $context.authorizer.claims.sub + '\"}'",
                         "stateMachineArn": generate_chapter_sfn.state_machine_arn
                     })
-                },
+                }
                 integration_responses=[
                     apigw.IntegrationResponse(
                         status_code="200",

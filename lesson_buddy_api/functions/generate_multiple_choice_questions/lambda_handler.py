@@ -1,9 +1,11 @@
 import json
 import os
 from typing import Dict, Any, List, Union
-from urllib import request, parse, error as urllib_error
+from urllib import request, parse, error as urllib_error, parse as urlparse # Added urlparse
 import time
-import boto3 # Added for S3 integration
+import boto3 
+
+s3_client = boto3.client('s3') # Initialize S3 client globally or within handler
 
 # bedrock_runtime = boto3.client(service_name='bedrock-runtime') # Placeholder
 
@@ -267,108 +269,110 @@ def generate_questions_from_content(lesson_content_markdown: str) -> List[Dict[s
 
     return [] 
 
+def _load_lesson_content_from_s3(s3_url: str) -> Dict[str, str]:
+    """
+    Loads lesson content (expected to be a JSON dictionary of markdown strings) from an S3 URL.
+    """
+    print(f"Loading lesson content from S3 URL: {s3_url}")
+    parsed_url = urlparse.urlparse(s3_url)
+    if parsed_url.scheme != 's3':
+        raise ValueError(f"Invalid S3 URL scheme: {s3_url}")
+    
+    bucket_name = parsed_url.netloc
+    object_key = parsed_url.path.lstrip('/')
+    
+    try:
+        response = s3_client.get_object(Bucket=bucket_name, Key=object_key)
+        content_string = response['Body'].read().decode('utf-8')
+        lesson_content_dict = json.loads(content_string)
+        if not isinstance(lesson_content_dict, dict):
+            raise ValueError(f"Content from S3 ({s3_url}) is not a JSON dictionary.")
+        print(f"Successfully loaded and parsed lesson content from {s3_url}")
+        return lesson_content_dict
+    except Exception as e:
+        print(f"Error loading lesson content from S3 (s3://{bucket_name}/{object_key}): {e}")
+        raise
+
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     Lambda handler function.
-    Expects input that includes lesson markdown content, course_id, chapter_id, and lesson_id.
-    Generates multiple-choice questions, saves them to S3, and returns them along with IDs.
+    Expects input that includes a lesson_s3_url, course_id, chapter_id, and lesson_id.
+    Downloads lesson content from S3, generates multiple-choice questions, 
+    saves them to S3, and returns their S3 path along with IDs.
     """
     print(f"Received event: {json.dumps(event)}")
 
     try:
-        # Extract IDs needed for S3 path and return value
         course_id = event.get('course_id')
         chapter_id = event.get('chapter_id')
         lesson_id = event.get('lesson_id')
+        lesson_s3_url = event.get('lesson_s3_url') # Expecting S3 URL for lesson content
+
+        if not all([course_id, chapter_id, lesson_id, lesson_s3_url]):
+            missing_items = [
+                k for k, v in {
+                    'course_id': course_id, 
+                    'chapter_id': chapter_id, 
+                    'lesson_id': lesson_id,
+                    'lesson_s3_url': lesson_s3_url
+                }.items() if not v
+            ]
+            raise ValueError(f"Missing required items in input event: {', '.join(missing_items)}")
+
+        # Load lesson content from S3
+        lesson_content_dict = _load_lesson_content_from_s3(lesson_s3_url)
         
-        # The S3 saving logic in fix_lesson_markdown expects these to be top-level in the event
-        # If they are nested under 'body' from a previous step, adjust accordingly or ensure
-        # the Step Function passes them at the top level.
-        # For now, assuming they are top-level as per fix_lesson_markdown's expectation for its inputs.
+        # Combine dictionary values into a single markdown string
+        # The fix_lesson_markdown function saves a dictionary of section_id: markdown_string
+        lesson_markdown_string = "\n\n".join(lesson_content_dict.values())
 
-        if not all([course_id, chapter_id, lesson_id]):
-            missing_ids = [k for k, v in {'course_id': course_id, 'chapter_id': chapter_id, 'lesson_id': lesson_id}.items() if not v]
-            raise ValueError(f"Missing required IDs in input event: {', '.join(missing_ids)}")
+        if not lesson_markdown_string.strip():
+             raise ValueError(f"Lesson content from S3 URL {lesson_s3_url} is empty or invalid after processing.")
 
-        lesson_markdown = event.get('lesson_content', None)
-
-        # If lesson_content is passed via an API Gateway event, it might be in event['body']
-        # and might be a stringified JSON.
-        # However, if this lambda is part of a Step Function, lesson_content might be directly
-        # available from the output of a previous state.
-        if not lesson_markdown and 'body' in event:
-            body_content = event['body']
-            if isinstance(body_content, str):
-                try:
-                    body_content = json.loads(body_content)
-                except json.JSONDecodeError:
-                    # If body is not JSON, it might be the raw markdown string itself.
-                    # This case is less likely if following a consistent pattern.
-                    pass # Keep body_content as string if not parsable JSON
-            
-            if isinstance(body_content, dict):
-                lesson_markdown = body_content.get('lesson_content')
-            elif isinstance(body_content, str): # If body was a non-JSON string
-                 # This assumes if body is a string, it *is* the lesson_markdown.
-                 # This part is a bit ambiguous without knowing the exact preceding step's output.
-                 # For robustness, let's prioritize event.get('lesson_content')
-                 # and only fall back to complex body parsing if necessary.
-                 # The current structure of generate_lesson_content returns lesson_content at top level.
-                 pass
-
-
-        if lesson_markdown and isinstance(lesson_markdown, dict):
-            # If lesson_content is a dict (e.g. {'section1': 'content1', ...}), convert to string.
-            # The question generation function expects a single markdown string.
-            # We might need a more sophisticated way to join sections if it's a dict.
-            # For now, simple string conversion.
-            lesson_markdown = "\n\n".join(lesson_markdown.values())
-
-
-        if not lesson_markdown or not isinstance(lesson_markdown, str) or not lesson_markdown.strip():
-             raise ValueError(f"Unable to extract or received empty/invalid lesson markdown content from the event. Content: {lesson_markdown}")
-
-        multiple_choice_questions: List[Dict[str, Any]] = generate_questions_from_content(lesson_markdown)
+        multiple_choice_questions: List[Dict[str, Any]] = generate_questions_from_content(lesson_markdown_string)
         
         if not multiple_choice_questions:
-            # Changed to return an empty list in the expected structure rather than raising ValueError immediately,
-            # to allow S3 saving of an empty list if that's desired, or further handling.
-            # However, the prompt implies an error if no questions. Let's stick to raising an error.
-            raise ValueError("No questions were generated from the lesson content.")
+            # If no questions are generated, we might still want to save an empty list to S3
+            # or handle this as an error. The current generate_questions_from_content returns [] on failure.
+            # For consistency, let's assume an empty list is a valid outcome to save,
+            # but the calling Step Function might treat it as a partial success/failure.
+            # The original code raised ValueError, let's stick to that for now if it's critical.
+            print(f"Warning: No questions were generated for lesson {lesson_id} from {lesson_s3_url}.")
+            # If an error should be raised:
+            # raise ValueError(f"No questions were generated from the lesson content at {lesson_s3_url}.")
+
 
         # Save the multiple choice questions to S3
-        s3 = boto3.client('s3')
-        bucket_name = os.environ.get('QUESTIONS_BUCKET_NAME') # New environment variable
-        if not bucket_name:
+        # s3_client is already initialized
+        questions_bucket_name = os.environ.get('QUESTIONS_BUCKET_NAME') 
+        if not questions_bucket_name:
             error_msg = "QUESTIONS_BUCKET_NAME environment variable not set."
             print(error_msg)
             raise ValueError(error_msg)
     
-        s3_key = f"{course_id}-{chapter_id}-{lesson_id}-questions.json" # Using a structured path
+        questions_s3_key = f"{course_id}-{chapter_id}-{lesson_id}-questions.json"
         try:
-            s3.put_object(
-                Bucket=bucket_name, 
-                Key=s3_key, 
-                Body=json.dumps(multiple_choice_questions, indent=2), # Added indent for readability
-                ContentType='application/json' # Added ContentType
+            s3_client.put_object(
+                Bucket=questions_bucket_name, 
+                Key=questions_s3_key, 
+                Body=json.dumps(multiple_choice_questions, indent=2), 
+                ContentType='application/json'
             )
-            print(f"Successfully saved multiple choice questions to S3: s3://{bucket_name}/{s3_key}")
+            questions_s3_path = f"s3://{questions_bucket_name}/{questions_s3_key}"
+            print(f"Successfully saved multiple choice questions to S3: {questions_s3_path}")
         except Exception as e:
-            print(f"Error saving multiple choice questions to S3 (s3://{bucket_name}/{s3_key}): {e}")
-            raise # Re-raise the exception to indicate failure
+            print(f"Error saving multiple choice questions to S3 (s3://{questions_bucket_name}/{questions_s3_key}): {e}")
+            raise 
 
-        # Return structure similar to fix_lesson_markdown
+        # Return structure
         return {
             "course_id": course_id,
             "chapter_id": chapter_id,
             "lesson_id": lesson_id,
-            "questions_s3_path": f"s3://{bucket_name}/{s3_key}",
-            "multiple_choice_questions": multiple_choice_questions 
+            "questions_s3_url": questions_s3_path, # Changed key to questions_s3_url for consistency
+            # "multiple_choice_questions": multiple_choice_questions # Optionally return questions if needed by next step
         }
 
     except Exception as e:
         print(f"Error in generate_multiple_choice_questions lambda_handler: {str(e)}")
-        # Re-raise to let Step Functions (or caller) handle it.
-        # Ensure the error is propagated correctly for Step Function error handling.
-        # The default re-raise should be sufficient.
         raise

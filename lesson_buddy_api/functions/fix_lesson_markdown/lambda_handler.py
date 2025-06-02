@@ -229,9 +229,11 @@ def lambda_handler(event, context):
     # For now, returning the key identifiers and the fixed content.
     # The Step Function definition will need to map this output correctly.
     
+    s3_url = f"s3://{bucket_name}/{s3_key}"
+    
     return {
         "chapter_id": chapter_id,
         "lesson_id": lesson_id,
         "course_id": course_id,         
-        "lesson_content": fixed_lesson_content # The actual fixed content
+        "lesson_s3_url": s3_url # Return S3 URL instead of content
     }

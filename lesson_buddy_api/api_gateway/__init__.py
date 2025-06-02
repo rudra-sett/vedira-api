@@ -69,7 +69,7 @@ class LessonBuddyApiGateway(Construct):
                         "input": "'{\"course_id\": ' + $input.json('$.course_id') + ', \"chapter_id\": ' + $input.json('$.chapter_id') + ', \"user_id\": \"' + $context.authorizer.claims.sub + '\"}'",
                         "stateMachineArn": generate_chapter_sfn.state_machine_arn
                     })
-                }
+                },
                 integration_responses=[
                     apigw.IntegrationResponse(
                         status_code="200",

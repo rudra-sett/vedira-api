@@ -241,7 +241,7 @@ def main_agent(course_plan, lesson_data, chapter_info):
             "parameters": {
                 "type": "object",
                 "properties": {
-                "system_prompt": {
+                "prompt": {
                     "type": "string",
                     "description": "This describes what criteria and other constraints the LLM should use to provide its evaluation of the lesson content. Remember that the current lesson content will be provided automatically.",
                 },                
@@ -276,6 +276,7 @@ def main_agent(course_plan, lesson_data, chapter_info):
     start_prompt = f"Please proceed with the lesson generation."
     messages = []
     while not completed:
+        print(start_prompt)
         output = call_model(system_prompt,
         prompt = start_prompt,
         messages = messages,
@@ -329,7 +330,7 @@ def main_agent(course_plan, lesson_data, chapter_info):
             if len(lesson_sections) == 0:
                 # Let's double check one more time if the lesson is complete
                 # If the lesson is complete, we can break out of the loop
-                start_prompt = f"You have not generated any lesson sections yet. Please start generating the lesson content by providing the first section's requirements."                
+                start_prompt = f"You have not generated any lesson sections yet. Please start generating the lesson content using the generate_lesson_content tool."
             elif assessment_count < len(lesson_sections):
                 start_prompt = f"You have completed fewer assessments than sections. Please continue assessing the lesson content until all sections are assessed."
             else:

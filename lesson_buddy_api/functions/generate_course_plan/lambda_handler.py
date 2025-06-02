@@ -18,7 +18,35 @@ def lambda_handler(event, context):
         timeline = data.get('timeline', '2 months')
         difficulty = data.get('difficulty','easy')
         custom_instructions = data.get('custom_instructions', None)
-        user_id = data.get('user_id', None)
+        # user_id = data.get('user_id', None) # User ID will be extracted from the auth token
+
+        # Extract User ID from the Authorization header
+        try:
+            auth_header = event.get('headers', {}).get('Authorization')
+            if not auth_header or not auth_header.startswith('Bearer '):
+                return {
+                    'statusCode': 401,
+                    'body': json.dumps({'error': 'Missing or malformed Authorization header'})
+                }
+            
+            token = auth_header.split(' ')[1]
+            payload_b64 = token.split('.')[1]
+            payload_b64 += '=' * (-len(payload_b64) % 4)
+            decoded_payload = base64.b64decode(payload_b64).decode('utf-8')
+            payload_json = json.loads(decoded_payload)
+            user_id = payload_json.get('sub')
+
+            if not user_id:
+                return {
+                    'statusCode': 400,
+                    'body': json.dumps({'error': 'User ID (sub) not found in token'})
+                }
+        except Exception as e:
+            print(f"Error decoding token or extracting sub: {str(e)}")
+            return {
+                'statusCode': 401,
+                'body': json.dumps({'error': f'Invalid token: {str(e)}'})
+            }
 
         course_plan = json.loads(generate_course_plan(topic, timeline, difficulty, custom_instructions)) # type: ignore
         course_plan['CourseID'] = str(uuid.uuid4())

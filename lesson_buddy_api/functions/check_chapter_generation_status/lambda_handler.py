@@ -1,6 +1,7 @@
 import json
 import boto3
 import os
+import base64
 
 sfn_client = boto3.client('stepfunctions')
 dynamodb_resource = boto3.resource('dynamodb')
@@ -18,8 +19,39 @@ def handler(event, context):
         # Parameters from event (API Gateway will pass them as strings)
         event_execution_arn = query_params.get('executionArn')
         event_course_id = query_params.get('course_id')
-        event_user_id = query_params.get('user_id')
+        # event_user_id = query_params.get('user_id') # User ID will be extracted from auth token if needed
         event_chapter_id = query_params.get('chapter_id')
+        
+        event_user_id = None # Initialize user_id
+
+        # If course_id and chapter_id are provided, user_id must come from token for DynamoDB lookup
+        if event_course_id and event_chapter_id:
+            try:
+                auth_header = event.get('headers', {}).get('Authorization')
+                if not auth_header or not auth_header.startswith('Bearer '):
+                    return {
+                        'statusCode': 401,
+                        'body': json.dumps({'error': 'Missing or malformed Authorization header (required when course_id and chapter_id are provided)'})
+                    }
+                
+                token = auth_header.split(' ')[1]
+                payload_b64 = token.split('.')[1]
+                payload_b64 += '=' * (-len(payload_b64) % 4) # Ensure correct padding
+                decoded_payload = base64.b64decode(payload_b64).decode('utf-8')
+                payload_json = json.loads(decoded_payload)
+                event_user_id = payload_json.get('sub')
+
+                if not event_user_id:
+                    return {
+                        'statusCode': 400,
+                        'body': json.dumps({'error': 'User ID (sub) not found in token'})
+                    }
+            except Exception as e:
+                print(f"Error decoding token or extracting sub: {str(e)}")
+                return {
+                    'statusCode': 401,
+                    'body': json.dumps({'error': f'Invalid token: {str(e)}'})
+                }
         
         result = {}
         
@@ -90,10 +122,11 @@ def handler(event, context):
                     }
         
         # If no relevant parameters were provided or no operations could be performed
-        if not result or (not event_execution_arn and not (event_course_id and event_user_id and event_chapter_id)):
+        # event_user_id is now derived from token if course_id and chapter_id are present
+        if not result or (not event_execution_arn and not (event_course_id and event_chapter_id)): # user_id is implicitly handled by token extraction if this path is taken
              return {
                 'statusCode': 400,
-                'body': json.dumps({'error': 'Required query string parameters missing. Provide either "executionArn" or all of "course_id", "user_id", and "chapter_id".'})
+                'body': json.dumps({'error': 'Required query string parameters missing. Provide either "executionArn" or both "course_id" and "chapter_id". User ID is derived from Authorization token.'})
             }
 
         return {

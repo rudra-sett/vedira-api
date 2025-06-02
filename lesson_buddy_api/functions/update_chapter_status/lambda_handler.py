@@ -2,6 +2,8 @@ import json
 import os
 import boto3
 import datetime
+import base64
+import json # Already imported but good to ensure
 
 dynamodb_resource = boto3.resource('dynamodb') # Renamed to avoid potential naming conflicts
 
@@ -18,17 +20,18 @@ def lambda_handler(event, context):
     try:
         print(f"Received event: {json.dumps(event)}")
 
-        # Event parameters (typically lowercase with underscores from API Gateway JSON body)
+        # Event parameters - directly from Step Function payload
         event_course_id = event.get('course_id')
-        event_user_id = event.get('user_id') 
+        event_user_id = event.get('user_id') # User ID is passed directly by the Step Function
         event_chapter_id = event.get('chapter_id')
         status_type = event.get('status_type') # "lessons" or "mcqs"
         new_status = event.get('new_status') # "PENDING", "GENERATING", "COMPLETED", "FAILED"
 
+        # Validate required parameters including event_user_id from the event payload
         if not all([event_course_id, event_user_id, event_chapter_id, status_type, new_status]):
             return {
                 'statusCode': 400,
-                'body': json.dumps({'error': 'Missing required parameters: course_id, user_id, chapter_id, status_type, or new_status'})
+                'body': json.dumps({'error': 'Missing required parameters: course_id, user_id, chapter_id, status_type, or new_status from event payload'})
             }
 
         if status_type not in ["lessons", "mcqs"]:

@@ -65,17 +65,18 @@ class LessonBuddyApiGateway(Construct):
                 passthrough_behavior=apigw.PassthroughBehavior.NEVER, # Important: process the template
                 request_templates={
                     "application/json": (
-                        "#set($courseId = $input.path('$.course_id'))\n"
-                        "#set($chapterId = $input.path('$.chapter_id'))\n"
-                        "#set($userId = $context.authorizer.claims.sub)\n"
-                        "{\n"
-                        "  \"input\": \"$util.escapeJavaScript('{"
-                        + "\\\"course_id\\\": \\\"' + $courseId + '\\\", "
-                        + "\\\"chapter_id\\\": \\\"' + $chapterId + '\\\", "
-                        + "\\\"user_id\\\": \\\"' + $userId + '\\\""
-                        + "'')\",\n"
-                        f"  \"stateMachineArn\": \"{generate_chapter_sfn.state_machine_arn}\"\n"
-                        "}"
+                        f"""
+                        #set($rawCourseId = $input.path('$.course_id'))
+                        #set($rawChapterId = $input.path('$.chapter_id'))
+                        #set($rawUserId = $context.authorizer.claims.sub)
+                        #set($escapedCourseId = $util.escapeJavaScript($rawCourseId))
+                        #set($escapedChapterId = $util.escapeJavaScript($rawChapterId))
+                        #set($escapedUserId = $util.escapeJavaScript($rawUserId))
+                        {{
+                        "input": "{{\\"course_id\\": \\"$escapedCourseId\\", \\"chapter_id\\": \\"$escapedChapterId\\", \\"user_id\\": \\"$escapedUserId\\"}}",
+                        "stateMachineArn": "{generate_chapter_sfn.state_machine_arn}"
+                        }}
+                        """
                     )
                 },
                 integration_responses=[

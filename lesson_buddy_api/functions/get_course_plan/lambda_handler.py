@@ -17,29 +17,32 @@ def lambda_handler(event, context):
     chapter_id = data.get('chapter_id', None)
     user_id = None
 
-    # Attempt to get user_id from Authorization header (API Gateway direct call)
-    auth_header = event.get('headers', {}).get('Authorization')
-    if auth_header and auth_header.startswith('Bearer '):
-        try:
-            token = auth_header.split(' ')[1]
-            payload_b64 = token.split('.')[1]
-            payload_b64 += '=' * (-len(payload_b64) % 4)
-            decoded_payload = base64.b64decode(payload_b64).decode('utf-8')
-            payload_json = json.loads(decoded_payload)
-            user_id = payload_json.get('sub')
-        except Exception as e:
-            print(f"Error decoding token or extracting sub: {str(e)}")
-            return {
-                'statusCode': 401,
-                'body': json.dumps({'error': f'Invalid token: {str(e)}'})
-            }
-    
-    # If user_id not found in token, try to get it from queryStringParameters (Step Function call)
-    # The Step Function definition passes user_id in event.queryStringParameters.user_id
-    if not user_id:
-        user_id = data.get('user_id') 
+    # Attempt to get user_id from event context (API Gateway with Lambda Authorizer)
+    try:
+        user_id = event['requestContext']['authorizer']['claims']['sub']
+        if not user_id:
+            # This might happen if 'sub' is empty, though unlikely with a proper authorizer
+            print("User ID (sub) is present but empty in authorizer claims.")
+            # We will fall through to the next method of getting user_id
+    except KeyError:
+        # 'requestContext' or 'authorizer' or 'claims' or 'sub' might be missing
+        # This is expected if the call is not from API Gateway with this authorizer (e.g., Step Function)
+        print("User ID not found in event.requestContext.authorizer.claims.sub. Trying queryStringParameters.")
+    except Exception as e:
+        # Catch any other unexpected errors during user_id extraction from context
+        print(f"Unexpected error extracting user_id from event context: {str(e)}")
+        # Fall through to try queryStringParameters, but log the error.
 
-    # Validate that user_id was obtained
+    # If user_id not found in event context (e.g. Step Function call),
+    # try to get it from queryStringParameters.
+    if not user_id:
+        user_id = data.get('user_id')
+        if user_id:
+            print("User ID obtained from queryStringParameters.")
+        else:
+            print("User ID also not found in queryStringParameters.")
+
+    # Validate that user_id was obtained by either method
     if not user_id:
         return {
             'statusCode': 400,

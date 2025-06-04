@@ -25,34 +25,32 @@ def lambda_handler(event, context):
     chapter_id = data.get('chapter_id')
     lesson_id = data.get('lesson_id')
 
-    # Extract User ID from the Authorization header
+    # Extract User ID from the event context
     try:
-        auth_header = event.get('headers', {}).get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
+        user_id = event['requestContext']['authorizer']['claims']['sub']
+        if not user_id:
+            # This case should ideally not happen if the authorizer is configured correctly
+            # and always includes 'sub', but good to have a fallback.
+            print("User ID (sub) is missing from authorizer claims.")
             return {
-                'statusCode': 401,
-                'body': json.dumps({'error': 'Missing or malformed Authorization header'}),
+                'statusCode': 401, # Unauthorized
+                'body': json.dumps({'error': 'User ID not found in request context'}),
                 'headers': headers
             }
-        
-        token = auth_header.split(' ')[1]
-        payload_b64 = token.split('.')[1]
-        payload_b64 += '=' * (-len(payload_b64) % 4)
-        decoded_payload = base64.b64decode(payload_b64).decode('utf-8')
-        payload_json = json.loads(decoded_payload)
-        user_id = payload_json.get('sub') # user_id is extracted, though not used in S3 key for this function
-
-        if not user_id: # Still good to validate it was present in token
-            return {
-                'statusCode': 400,
-                'body': json.dumps({'error': 'User ID (sub) not found in token'}),
-                'headers': headers
-            }
-    except Exception as e:
-        print(f"Error decoding token or extracting sub: {str(e)}")
+    except KeyError as e:
+        # This handles cases where the path to 'sub' might be missing
+        print(f"Error accessing user_id from event context: {str(e)}")
         return {
-            'statusCode': 401,
-            'body': json.dumps({'error': f'Invalid token: {str(e)}'}),
+            'statusCode': 401, # Unauthorized
+            'body': json.dumps({'error': f'Could not extract user ID from request context: {str(e)}'}),
+            'headers': headers
+        }
+    except Exception as e:
+        # Catch any other unexpected errors during user_id extraction
+        print(f"Unexpected error extracting user_id: {str(e)}")
+        return {
+            'statusCode': 500, # Internal Server Error
+            'body': json.dumps({'error': f'An unexpected error occurred while processing user identity: {str(e)}'}),
             'headers': headers
         }
 

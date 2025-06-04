@@ -25,33 +25,27 @@ def handler(event, context):
         
         event_user_id = None # Initialize user_id
 
-        # If course_id and chapter_id are provided, user_id must come from token for DynamoDB lookup
+        # If course_id and chapter_id are provided, user_id must come from event context for DynamoDB lookup
         if event_course_id and event_chapter_id:
             try:
-                auth_header = event.get('headers', {}).get('Authorization')
-                if not auth_header or not auth_header.startswith('Bearer '):
-                    return {
-                        'statusCode': 401,
-                        'body': json.dumps({'error': 'Missing or malformed Authorization header (required when course_id and chapter_id are provided)'})
-                    }
-                
-                token = auth_header.split(' ')[1]
-                payload_b64 = token.split('.')[1]
-                payload_b64 += '=' * (-len(payload_b64) % 4) # Ensure correct padding
-                decoded_payload = base64.b64decode(payload_b64).decode('utf-8')
-                payload_json = json.loads(decoded_payload)
-                event_user_id = payload_json.get('sub')
-
+                event_user_id = event['requestContext']['authorizer']['claims']['sub']
                 if not event_user_id:
+                    print("User ID (sub) is missing from authorizer claims.")
                     return {
-                        'statusCode': 400,
-                        'body': json.dumps({'error': 'User ID (sub) not found in token'})
+                        'statusCode': 401, # Unauthorized
+                        'body': json.dumps({'error': 'User ID not found in request context (required when course_id and chapter_id are provided)'})
                     }
-            except Exception as e:
-                print(f"Error decoding token or extracting sub: {str(e)}")
+            except KeyError as e:
+                print(f"Error accessing user_id from event context: {str(e)}")
                 return {
-                    'statusCode': 401,
-                    'body': json.dumps({'error': f'Invalid token: {str(e)}'})
+                    'statusCode': 401, # Unauthorized
+                    'body': json.dumps({'error': f'Could not extract user ID from request context: {str(e)} (required when course_id and chapter_id are provided)'})
+                }
+            except Exception as e:
+                print(f"Unexpected error extracting user_id: {str(e)}")
+                return {
+                    'statusCode': 500, # Internal Server Error
+                    'body': json.dumps({'error': f'An unexpected error occurred while processing user identity: {str(e)}'})
                 }
         
         result = {}

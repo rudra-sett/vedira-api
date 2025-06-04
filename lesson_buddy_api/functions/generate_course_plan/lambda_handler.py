@@ -22,33 +22,32 @@ def lambda_handler(event, context):
         custom_instructions = data.get('custom_instructions', None)
         # user_id = data.get('user_id', None) # User ID will be extracted from the auth token
 
-        # Extract User ID from the Authorization header
+        # Extract User ID from the event context
         try:
-            auth_header = event.get('headers', {}).get('Authorization')
-            if not auth_header or not auth_header.startswith('Bearer '):
-                return {
-                    'statusCode': 401,
-                    'body': json.dumps({'error': 'Missing or malformed Authorization header'})
-                }
-            
-            token = auth_header.split(' ')[1]
-            payload_b64 = token.split('.')[1]
-            payload_b64 += '=' * (-len(payload_b64) % 4)
-            decoded_payload = base64.b64decode(payload_b64).decode('utf-8')
-            payload_json = json.loads(decoded_payload)
-            user_id = payload_json.get('sub')
-
+            user_id = event['requestContext']['authorizer']['claims']['sub']
             if not user_id:
+                # This case should ideally not happen if the authorizer is configured correctly
+                # and always includes 'sub', but good to have a fallback.
+                print("User ID (sub) is missing from authorizer claims.")
                 return {
-                    'statusCode': 400,
-                    'body': json.dumps({'error': 'User ID (sub) not found in token'}),
+                    'statusCode': 401, # Unauthorized
+                    'body': json.dumps({'error': 'User ID not found in request context'}),
                     'headers': {'Content-Type': 'application/json', "Access-Control-Allow-Origin": "*"}
                 }
-        except Exception as e:
-            print(f"Error decoding token or extracting sub: {str(e)}")
+        except KeyError as e:
+            # This handles cases where the path to 'sub' might be missing
+            print(f"Error accessing user_id from event context: {str(e)}")
             return {
-                'statusCode': 401,
-                'body': json.dumps({'error': f'Invalid token: {str(e)}'}),
+                'statusCode': 401, # Unauthorized
+                'body': json.dumps({'error': f'Could not extract user ID from request context: {str(e)}'}),
+                'headers': {'Content-Type': 'application/json', "Access-Control-Allow-Origin": "*"}
+            }
+        except Exception as e:
+            # Catch any other unexpected errors during user_id extraction
+            print(f"Unexpected error extracting user_id: {str(e)}")
+            return {
+                'statusCode': 500, # Internal Server Error
+                'body': json.dumps({'error': f'An unexpected error occurred while processing user identity: {str(e)}'}),
                 'headers': {'Content-Type': 'application/json', "Access-Control-Allow-Origin": "*"}
             }
 
@@ -130,7 +129,7 @@ def call_model(prompt, output_format=None):
         
     url = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'
     data = {
-        "model": "gemini-2.5-pro-preview-05-06",
+        "model": "gemini-2.5-flash-preview-04-17",
         "messages": [{"role": "user", "content": prompt}]
         
     }

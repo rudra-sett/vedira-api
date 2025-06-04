@@ -34,38 +34,30 @@ def lambda_handler(event, context):
         if query_params is None: # API Gateway might pass None if no query params
             query_params = {}
 
-        # Extract User ID from the Authorization header
+        # Extract User ID from the event context
         user_id = None
         try:
-            auth_header = event.get('headers', {}).get('Authorization')
-            if not auth_header or not auth_header.startswith('Bearer '):
-                logger.error("Missing or malformed Authorization header")
-                return {
-                    "statusCode": 401,
-                    "body": json.dumps({"error": "Missing or malformed Authorization header"}),
-                    "headers": {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*"},
-                }
-            
-            token = auth_header.split(' ')[1]
-            payload_b64 = token.split('.')[1]
-            payload_b64 += '=' * (-len(payload_b64) % 4)
-            decoded_payload = base64.b64decode(payload_b64).decode('utf-8')
-            payload_json = json.loads(decoded_payload)
-            user_id = payload_json.get('sub')
-
+            user_id = event['requestContext']['authorizer']['claims']['sub']
             if not user_id:
-                logger.error("User ID (sub) not found in token")
+                logger.error("User ID (sub) is missing from authorizer claims.")
                 return {
-                    "statusCode": 400,
-                    "body": json.dumps({"error": "User ID (sub) not found in token"}),
+                    "statusCode": 401, # Unauthorized
+                    "body": json.dumps({"error": "User ID not found in request context"}),
                     "headers": {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*"},
                 }
-            logger.info(f"Extracted user_id: {user_id}") # Log the user_id
-        except Exception as e:
-            logger.error(f"Error decoding token or extracting sub: {str(e)}")
+            logger.info(f"Extracted user_id: {user_id}")
+        except KeyError as e:
+            logger.error(f"Error accessing user_id from event context: {str(e)}")
             return {
-                "statusCode": 401,
-                "body": json.dumps({"error": f"Invalid token: {str(e)}"}),
+                "statusCode": 401, # Unauthorized
+                "body": json.dumps({"error": f"Could not extract user ID from request context: {str(e)}"}),
+                "headers": {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*"},
+            }
+        except Exception as e:
+            logger.error(f"Unexpected error extracting user_id: {str(e)}")
+            return {
+                "statusCode": 500, # Internal Server Error
+                "body": json.dumps({"error": f"An unexpected error occurred while processing user identity: {str(e)}"}),
                 "headers": {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*"},
             }
             

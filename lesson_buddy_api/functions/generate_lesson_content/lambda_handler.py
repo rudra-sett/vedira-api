@@ -25,7 +25,7 @@ def lambda_handler(event, context):
                     lesson_data = lesson
                     course_plan['chapters'][c]['lessons'][l]['generated'] = True                    
     
-    lesson_content = main_agent(course_plan, lesson_data, chapter_info)
+    lesson_content = main_agent(course_plan, lesson_data, chapter_info, context)
 
     # S3 saving will be handled by the fix_lesson_markdown Lambda
     # Ensure all necessary IDs and the content are returned for the next step.
@@ -66,6 +66,8 @@ def get_api_info(model):
         url = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'
         api_key = os.environ['API_KEY']
         return url, api_key, 'gemini-2.0-flash-lite-001'
+    else:
+        return get_api_info('gemini-2.0-flash')  # Default to gemini-2.0-flash if no valid model is specified
     # maybe try other LLMs
     # if model == 'deepseek':
     #     url = 'https://api.deepseek.com/chat/completions'
@@ -106,8 +108,6 @@ def call_model(system_prompt, prompt, messages=None, output_format=None, tools=N
 
     if tools:
         data['tools'] = tools
-
-    data_bytes = json.dumps(data).encode('utf-8')
     
     # Retry configuration
     max_retries = 5  # Maximum number of retries
@@ -115,6 +115,12 @@ def call_model(system_prompt, prompt, messages=None, output_format=None, tools=N
     max_delay = 10  # Maximum delay in seconds
     
     for attempt in range(max_retries + 1):  # +1 to include the initial attempt
+        # fallback to gemini-2.0-flash is we're hitting the retry limit
+        if attempt == max_retries and model != 'gemini-2.0-flash':
+            print(f"Retry limit reached. Falling back to gemini-2.0-flash model for final attempt.")
+            url, api_key, model = get_api_info('gemini-2.0-flash')
+            data['model'] = model
+        data_bytes = json.dumps(data).encode('utf-8')
         req = request.Request(url, data=data_bytes)
         req.add_header('Content-Type', 'application/json')
         req.add_header('Authorization', f'Bearer {api_key}')
@@ -155,7 +161,7 @@ lesson_sections = {}
 generation_counts = {}
 assessment_count = 0
 
-def main_agent(course_plan, lesson_data, chapter_info):
+def main_agent(course_plan, lesson_data, chapter_info, context):
     global lesson_sections
     global generation_counts
     global assessment_count
@@ -165,18 +171,10 @@ def main_agent(course_plan, lesson_data, chapter_info):
     lesson_sections = {}
     generation_counts = {}
     assessment_count = 0
+    agent_start_wall_time = time.time() # For tracking agent's own execution time
 
-    # main agentic loop
-    # it is instructed to create a list of requirements of the topic
-    # then ask the sub-agent to generate the lesson content
-    # it will also ask for a sub-agent to assess the lesson content
-    # if the assessor approves the content, the main agent will add it to the course plan
-    # if the assessor rejects the content, the main agent will ask the sub-agent to generate a new lesson content
-    # the main agent will repeat this process until the course plan is complete
-    # the main agent will return the course plan    
-
-    current_sections_str = '\n'.join(lesson_sections.keys())
-    system_prompt = f'''
+    # Static part of the system prompt (doesn't change per iteration based on time or lesson state)
+    static_system_prompt_template = """
     You are a world-class teacher who is responsible for creating a lesson for a student.
     You will be given a course plan, and a specific lesson topic.
     You will first create a list of requirements of the topic, which may include things like example problems or equations/formulas. 
@@ -202,20 +200,16 @@ def main_agent(course_plan, lesson_data, chapter_info):
     4. The assessor will give you an evaluation. 
     5. If the assessor believes a lesson section does not meet your requirements, ask the content generator to re-create the lesson section based on feedback from the assessor.
     6. Repeat this until you have a full, COMPLETE lesson (not just one section) approved by the assessor. PLEASE avoid generating and re-assessing content repeatedly. You shouldn't stay on the same section for more than 3-4 iterations.
+"""
 
-    The course the lesson is a part of is called {course_plan['title']}. The description of the course is {course_plan['description']}.
-    The chapter the lesson is a part of is called {chapter_info['title']}, which is described as "{chapter_info['description']}."
-    
-    Here is the information on the lesson you are creating and curating content for: {lesson_data}. Ensure all aspects of the lesson are addressed.    
-    The current lesson sections keys, if any, are: 
-    {current_sections_str}
-    Only complete the lesson generation after ALL aspects and portions of the lesson are completed.
-
-    This is the number of times each lesson section has been re-written. Please do not exceed 3 re-writes.
-
-    {json.dumps(generation_counts)}
-
-    '''
+    # main agentic loop
+    # it is instructed to create a list of requirements of the topic
+    # then ask the sub-agent to generate the lesson content
+    # it will also ask for a sub-agent to assess the lesson content
+    # if the assessor approves the content, the main agent will add it to the course plan
+    # if the assessor rejects the content, the main agent will ask the sub-agent to generate a new lesson content
+    # the main agent will repeat this process until the course plan is complete
+    # the main agent will return the course plan    
 
     tools = [
         {
@@ -287,12 +281,69 @@ def main_agent(course_plan, lesson_data, chapter_info):
     main_agent_retry_delay = 5  # seconds
 
     while not completed:
+        agent_current_wall_time = time.time()
+        agent_elapsed_seconds = agent_current_wall_time - agent_start_wall_time
+        lambda_remaining_millis = context.get_remaining_time_in_millis()
+        lambda_remaining_seconds = lambda_remaining_millis / 1000
+
+        time_warning_message_content = ""
+
+        # Priority 1: Lambda timeout imminent
+        if lambda_remaining_seconds < 60:  # Less than 1 minute for Lambda
+            time_warning_message_content = (
+                f"CRITICAL WARNING: Lambda function has less than {lambda_remaining_seconds:.0f} seconds remaining. "
+                f"Finalize and complete the lesson generation IMMEDIATELY using the 'complete_lesson_generation' tool."
+            )
+        # Priority 2: Agent execution over 10 minutes
+        elif agent_elapsed_seconds > (10 * 60):
+            time_warning_message_content = (
+                f"IMPORTANT WARNING: Agent has been processing for over {agent_elapsed_seconds/60:.1f} minutes. "
+                f"The target maximum agent execution time is 10 minutes. Please try to finalize and complete the lesson generation IMMEDIATELY using the 'complete_lesson_generation' tool. "
+                f"If you cannot complete it now, make your next step the absolute final one. (Lambda has {lambda_remaining_seconds/60:.1f} minutes remaining)."
+            )
+        # Priority 3: Agent execution approaching 10 minutes (over 9 minutes)
+        elif agent_elapsed_seconds > (9 * 60):
+            remaining_agent_time_to_10_min_target = max(0, (10 * 60) - agent_elapsed_seconds)
+            time_warning_message_content = (
+                f"IMPORTANT ADVISORY: Agent has been processing for approximately {agent_elapsed_seconds/60:.1f} minutes. "
+                f"Please aim to wrap up the lesson generation within the next {remaining_agent_time_to_10_min_target/60:.1f} minutes (total 10 minutes target for agent). "
+                f"Prioritize completing the lesson efficiently. (Lambda has {lambda_remaining_seconds/60:.1f} minutes remaining)."
+            )
+        # Optional: General status if no specific warnings, or keep it clean
+        # else:
+        #    time_warning_message_content = f"Agent execution: {agent_elapsed_seconds/60:.1f}m. Lambda time left: {lambda_remaining_seconds/60:.1f}m."
+
+
+        current_sections_str_updated = '\n'.join(lesson_sections.keys())
+        generation_counts_updated_str = json.dumps(generation_counts)
+        
+        time_info_section = f"\n\n--- Time Status ---\nAgent execution time: {agent_elapsed_seconds/60:.1f} minutes.\nLambda function time remaining: {lambda_remaining_seconds/60:.1f} minutes."
+        if time_warning_message_content:
+            time_info_section += f"\n{time_warning_message_content}"
+
+
+        dynamic_system_prompt_part = f"""
+    The course the lesson is a part of is called {course_plan['title']}. The description of the course is {course_plan['description']}.
+    The chapter the lesson is a part of is called {chapter_info['title']}, which is described as "{chapter_info['description']}."
+    
+    Here is the information on the lesson you are creating and curating content for: {lesson_data}. Ensure all aspects of the lesson are addressed.    
+    The current lesson sections keys, if any, are: 
+    {current_sections_str_updated}
+    Only complete the lesson generation after ALL aspects and portions of the lesson are completed.
+
+    This is the number of times each lesson section has been re-written. Please do not exceed 3 re-writes.
+
+    {generation_counts_updated_str}{time_info_section}
+"""
+        current_iteration_system_prompt = static_system_prompt_template + dynamic_system_prompt_part
+        
         print(start_prompt)
+        # print(f"DEBUG: Current system prompt for LLM:\n{current_iteration_system_prompt}") # For debugging
         output = None # Initialize output to None before retry loop
 
         for attempt in range(main_agent_max_retries):
             output = call_model(
-                system_prompt,
+                current_iteration_system_prompt,
                 prompt=start_prompt,
                 messages=messages,
                 model='gemini-2.0-flash',
@@ -384,7 +435,7 @@ def generate_lesson_content(prompt,lesson_section):
         Make sure to just output the lesson content, no additional niceties or metadata.
     """
     try:
-        model_output = call_model(system_prompt, prompt,model='gemini-2.0-flash')
+        model_output = call_model(system_prompt, prompt,model='claude-3.7-sonnet')
         if model_output and 'content' in model_output:
             lesson_gen_output = model_output['content']
             lesson_sections[lesson_section] = lesson_gen_output

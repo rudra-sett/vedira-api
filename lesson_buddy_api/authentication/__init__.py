@@ -17,15 +17,15 @@ class Authentication(Construct):
             self_sign_up_enabled=True,
             sign_in_aliases=cognito.SignInAliases(
                 email=True,
-                phone=True
+                # phone=True
             ),
             auto_verify=cognito.AutoVerifiedAttrs(
                 email=True,
-                phone=False
+                # phone=False
             ),
             standard_attributes=cognito.StandardAttributes(
                 email=cognito.StandardAttribute(required=True, mutable=True),
-                phone_number=cognito.StandardAttribute(required=True, mutable=True)
+                # phone_number=cognito.StandardAttribute(required=True, mutable=True)
             ),
             password_policy=cognito.PasswordPolicy(
                 min_length=8,
@@ -34,7 +34,8 @@ class Authentication(Construct):
                 require_digits=True,
                 require_symbols=True
             ),
-            account_recovery=cognito.AccountRecovery.EMAIL_AND_PHONE_WITHOUT_MFA,
+            # account_recovery=cognito.AccountRecovery.EMAIL_AND_PHONE_WITHOUT_MFA,
+            account_recovery=cognito.AccountRecovery.EMAIL_ONLY,
             removal_policy=RemovalPolicy.DESTROY # Or RETAIN, depending on preference
         )
 

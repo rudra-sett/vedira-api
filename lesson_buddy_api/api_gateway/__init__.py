@@ -27,6 +27,7 @@ class LessonBuddyApiGateway(Construct):
                  auth_resend_verification_code_function: _lambda.Function, # Added
                  auth_refresh_token_function: _lambda.Function, # Added
                  get_multiple_choice_questions_function: _lambda.Function, # Added for new endpoint
+                 get_image_data_function: _lambda.Function, # Added for new endpoint
                  **kwargs) -> None:
         super().__init__(scope, id, **kwargs)
 
@@ -106,6 +107,7 @@ class LessonBuddyApiGateway(Construct):
         get_lesson_plan_integration = apigw.LambdaIntegration(get_lesson_plan_function)
         check_chapter_generation_status_integration = apigw.LambdaIntegration(check_chapter_generation_status_function)
         get_multiple_choice_questions_integration = apigw.LambdaIntegration(get_multiple_choice_questions_function) # Added
+        get_image_data_integration = apigw.LambdaIntegration(get_image_data_function) # Added
         
         # Define resources and methods based on the image
 
@@ -217,6 +219,23 @@ class LessonBuddyApiGateway(Construct):
             get_multiple_choice_questions_integration,
             authorizer=cognito_authorizer,
             authorization_type=apigw.AuthorizationType.COGNITO,            
+        )
+
+        # POST /get-image (No authorizer, as it's for public image retrieval)
+        get_image_resource = api.root.add_resource("get-image")
+        get_image_resource.add_method(
+            "POST", # Use POST to send S3 URL in body
+            get_image_data_integration,
+            # No authorizer, as this is intended for public image retrieval
+            # Ensure the S3 bucket policy allows public read for the images
+            method_responses=[apigw.MethodResponse(
+                status_code="200",
+                response_parameters={
+                    'method.response.header.Content-Type': True,
+                    'method.response.header.Access-Control-Allow-Origin': True,
+                    'method.response.header.Content-Disposition': True
+                }
+            )]
         )
 
         self.api = api

@@ -68,8 +68,8 @@ def generate_course_image(course_title, course_id):
         s3_client.put_object(Bucket=bucket_name, Key=s3_key, Body=image_data, ContentType='image/png')
         print(f"Image uploaded to s3://{bucket_name}/{s3_key}")
 
-        # Construct the public URL (assuming public read access is configured on the bucket)
-        image_url = f"https://{bucket_name}.s3.amazonaws.com/{s3_key}"
+        # Construct the S3 URL in s3://bucket/key format
+        image_url = f"s3://{bucket_name}/{s3_key}"
         return image_url
 
     except ClientError as e:

@@ -693,5 +693,23 @@ class Functions(Construct): # Changed from Stack to Construct
             self.generate_multiple_choice_questions_function # Added new function
         ]
 
+        # Add function to the stack from folder get_image_data
+        self.get_image_data_function = _lambda.Function(
+            self, "GetImageDataFunction",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            handler="lambda_handler.lambda_handler",
+            code=_lambda.Code.from_asset("lesson_buddy_api/functions/get_image_data"),
+            timeout=Duration.seconds(30), # Image retrieval should be quick
+            environment={
+                # No specific environment variables needed, as it parses URL directly
+            }
+        )
+        # Grant read permissions to all S3 buckets, as the URL can point to any S3 object
+        # In a real-world scenario, you might want to restrict this to specific buckets
+        self.get_image_data_function.add_to_role_policy(iam.PolicyStatement(
+            actions=["s3:GetObject"],
+            resources=[f"arn:aws:s3:::{course_images_bucket}/*"] # Grant access to all S3 objects
+        ))
+
         for lambda_func in lambda_functions_to_invoke:
             lambda_func.grant_invoke(self.course_generation_sfn.role)

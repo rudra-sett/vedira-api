@@ -703,13 +703,8 @@ class Functions(Construct): # Changed from Stack to Construct
             environment={
                 # No specific environment variables needed, as it parses URL directly
             }
-        )
-        # Grant read permissions to all S3 buckets, as the URL can point to any S3 object
-        # In a real-world scenario, you might want to restrict this to specific buckets
-        self.get_image_data_function.add_to_role_policy(iam.PolicyStatement(
-            actions=["s3:GetObject"],
-            resources=[f"arn:aws:s3:::{course_images_bucket}/*"] # Grant access to all S3 objects
-        ))
+        )        
+        course_images_bucket.grant_read(self.get_image_data_function) # Grant read permissions to the course images bucket        
 
         for lambda_func in lambda_functions_to_invoke:
             lambda_func.grant_invoke(self.course_generation_sfn.role)

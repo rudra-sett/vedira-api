@@ -204,17 +204,16 @@ def lambda_handler(event, context):
             'headers': {'Content-Type': 'application/json', "Access-Control-Allow-Origin": "*"}
         }
 
-def call_model(prompt, output_format=None):
-    api_key = os.environ.get('API_KEY')
+
+def call_model(prompt, endpoint, api_key, model, output_format=None):    
     if not api_key:
         # This check is important here as call_model is a standalone utility
         print("Error in call_model: API_KEY environment variable not set.")
         # Return None, lambda_handler will catch this and raise ValueError
         return None 
-        
-    url = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'
+            
     data = {
-        "model": "gemini-2.5-flash-preview-04-17",
+        "model": model,
         "messages": [{"role": "user", "content": prompt}]
         
     }
@@ -232,7 +231,7 @@ def call_model(prompt, output_format=None):
 
     data_bytes = json.dumps(data).encode('utf-8')
     
-    req = request.Request(url, data=data_bytes)
+    req = request.Request(endpoint, data=data_bytes)
     req.add_header('Content-Type', 'application/json')
     req.add_header('Authorization', f'Bearer {api_key}')
     
@@ -353,6 +352,8 @@ course_plan_schema = {
     ]
 }
 
+use_google = False
+
 def generate_course_plan(topic, timeline, difficulty, custom_instructions):
     system_prompt = f"""
     You are a course assistant that helps students to create a course plan based on their topic, timeline and difficulty.
@@ -363,4 +364,14 @@ def generate_course_plan(topic, timeline, difficulty, custom_instructions):
     Difficulty: {difficulty}
     Custom Instructions: {custom_instructions}
     """
-    return call_model(system_prompt, course_plan_schema)
+    if use_google:
+        endpoint = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'
+        model = "gemini-2.0-flash"
+        api_key = os.environ['API_KEY']
+    else:
+        
+        endpoint = 'http://Bedroc-Proxy-xVtSm3tV6xYe-1727257641.us-east-1.elb.amazonaws.com/api/v1/chat/completions'
+        api_key = os.environ['BEDROCK_API_KEY']
+        model = 'us.anthropic.claude-3-7-sonnet-20250219-v1:0'
+        
+    return call_model(system_prompt, endpoint, api_key, model, course_plan_schema)

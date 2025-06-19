@@ -156,6 +156,10 @@ def lambda_handler(event, context):
                 print("Warning: Failed to generate or upload course cover image.")
                 course_plan['cover_image_url'] = None # Or a default image URL
 
+        # Add blank chapter_image_url to each chapter
+        for chapter in course_plan['chapters']:
+            chapter['chapter_image_url'] = ""
+
         course_plan['CourseID'] = course_id
         course_plan['UserID'] = user_id
 
@@ -205,7 +209,7 @@ def lambda_handler(event, context):
         }
 
 
-def call_model(prompt, endpoint, api_key, model, output_format=None):    
+def call_model(prompt, endpoint, api_key, model, tools=None):    
     if not api_key:
         # This check is important here as call_model is a standalone utility
         print("Error in call_model: API_KEY environment variable not set.")
@@ -214,18 +218,12 @@ def call_model(prompt, endpoint, api_key, model, output_format=None):
             
     data = {
         "model": model,
-        "messages": [{"role": "user", "content": prompt}]
-        
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": 8192        
     }
     
-    if output_format:
-        data['response_format'] = {
-            "type": "json_schema",
-            "json_schema" : {
-                "name": "course_plan",
-                "schema": output_format  
-            }
-        }
+    if tools:
+        data['tools'] = tools
 
     print(data)
 
@@ -241,7 +239,7 @@ def call_model(prompt, endpoint, api_key, model, output_format=None):
                 content = resp.read()
                 output = json.loads(content)
                 if output.get('choices') and output['choices'][0].get('message') and 'content' in output['choices'][0]['message']:
-                    return output['choices'][0]['message']['content']
+                    return output['choices'][0]['message']
                 else:
                     print(f"LLM response missing expected structure: {output}")
                     # Return None, lambda_handler will catch this
@@ -352,6 +350,16 @@ course_plan_schema = {
     ]
 }
 
+tools = [
+        {
+            "type": "function",
+            "function": {
+            "name": "generate_course_plan",
+            "description": "Output a JSON object representing a course plan based on the provided topic, timeline, difficulty, and custom instructions.",
+            "parameters": course_plan_schema
+            }
+        }
+    ]
 use_google = False
 
 def generate_course_plan(topic, timeline, difficulty, custom_instructions):
@@ -372,6 +380,12 @@ def generate_course_plan(topic, timeline, difficulty, custom_instructions):
         
         endpoint = 'http://Bedroc-Proxy-xVtSm3tV6xYe-1727257641.us-east-1.elb.amazonaws.com/api/v1/chat/completions'
         api_key = os.environ['BEDROCK_API_KEY']
-        model = 'us.anthropic.claude-3-7-sonnet-20250219-v1:0'
+        model = 'us.anthropic.claude-3-5-haiku-20241022-v1:0'
         
-    return call_model(system_prompt, endpoint, api_key, model, course_plan_schema)
+    output = call_model(system_prompt, endpoint, api_key, model, tools = tools) # Pass tools to the model call
+    if output is not None and 'tool_calls' in output and output['tool_calls'] is not None:        
+        for tool_call in output['tool_calls']:
+            return tool_call['function']['arguments']
+    else:
+        print(f"Error: LLM did not return a valid tool call. Output: {output}")
+        return None

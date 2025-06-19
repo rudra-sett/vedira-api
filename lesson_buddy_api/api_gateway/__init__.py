@@ -224,10 +224,10 @@ class LessonBuddyApiGateway(Construct):
         # POST /get-image (No authorizer, as it's for public image retrieval)
         get_image_resource = api.root.add_resource("get-image")
         get_image_resource.add_method(
-            "POST", # Use POST to send S3 URL in body
+            "GET", # Use POST to send S3 URL in query string
             get_image_data_integration,
-            # No authorizer, as this is intended for public image retrieval
-            # Ensure the S3 bucket policy allows public read for the images
+            authorizer=cognito_authorizer,
+            authorization_type=apigw.AuthorizationType.COGNITO,            
             method_responses=[apigw.MethodResponse(
                 status_code="200",
                 response_parameters={

@@ -9,29 +9,15 @@ def lambda_handler(event, context):
     try:
         print(f"Received event: {json.dumps(event)}")
 
-        # Extract S3 URL from the event body
-        if 'body' not in event:
-            return {
-                'statusCode': 400,
-                'body': json.dumps({'error': 'Missing body in request'}),
-                'headers': {'Content-Type': 'application/json', "Access-Control-Allow-Origin": "*"}
-            }
-        
-        try:
-            body = json.loads(event['body'])
-        except json.JSONDecodeError:
-            return {
-                'statusCode': 400,
-                'body': json.dumps({'error': 'Invalid JSON in request body'}),
-                'headers': {'Content-Type': 'application/json', "Access-Control-Allow-Origin": "*"}
-            }
-
-        s3_url = body.get('s3_url')
+        # Extract S3 URL from query string parameters for GET request
+        s3_url = None
+        if 'queryStringParameters' in event and event['queryStringParameters']:
+            s3_url = event['queryStringParameters'].get('s3_url')
 
         if not s3_url:
             return {
                 'statusCode': 400,
-                'body': json.dumps({'error': 'Missing s3_url in request body'}),
+                'body': json.dumps({'error': 'Missing s3_url in query parameters'}),
                 'headers': {'Content-Type': 'application/json', "Access-Control-Allow-Origin": "*"}
             }
 

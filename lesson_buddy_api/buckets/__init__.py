@@ -21,3 +21,9 @@ class Buckets(Construct):
             removal_policy=RemovalPolicy.DESTROY, # Or RETAIN depending on data persistence needs
             auto_delete_objects=True # Set to False if you want to retain objects on stack deletion
         )
+
+        self.course_images_bucket = s3.Bucket(
+            self, "CourseImagesS3Bucket",
+            removal_policy=RemovalPolicy.DESTROY,
+            auto_delete_objects=True
+        )

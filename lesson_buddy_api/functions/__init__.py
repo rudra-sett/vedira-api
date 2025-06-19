@@ -18,6 +18,7 @@ class Functions(Construct): # Changed from Stack to Construct
                  course_table: dynamodb.ITable, 
                  lesson_bucket: s3.IBucket,
                  questions_bucket: s3.IBucket, # Added questions_bucket
+                 course_images_bucket: s3.IBucket, # Added course_images_bucket
                  user_pool_id: str, # Added
                  user_pool_client_id: str, # Added
                  user_pool_arn: str, # Added for IAM permissions
@@ -36,10 +37,12 @@ class Functions(Construct): # Changed from Stack to Construct
             environment={
                 "API_KEY": os.environ.get("API_KEY", ""),
                 "BEDROCK_API_KEY": os.environ.get("BEDROCK_API_KEY", ""),
-                "COURSE_TABLE_NAME": course_table.table_name
+                "COURSE_TABLE_NAME": course_table.table_name,
+                "COURSE_IMAGES_BUCKET_NAME": course_images_bucket.bucket_name # Added
             }
         )
         course_table.grant_write_data(self.generate_course_plan_function)
+        course_images_bucket.grant_write(self.generate_course_plan_function) # Grant write permissions to the new bucket        
 
         # Add function to the stack from folder get_lesson_content
         self.get_lesson_content_function = _lambda.Function(

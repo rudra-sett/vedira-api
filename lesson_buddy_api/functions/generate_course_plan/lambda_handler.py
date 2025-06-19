@@ -5,8 +5,79 @@ import base64
 import uuid
 import os
 import datetime
+import random
+from concurrent.futures import ThreadPoolExecutor
+
 from botocore.exceptions import ClientError # For DynamoDB error handling
 from urllib import error as urllib_error # For call_model HTTP errors
+
+# Create a Bedrock Runtime client in the AWS Region of your choice.
+bedrock_client = boto3.client("bedrock-runtime", region_name="us-east-1")
+s3_client = boto3.client("s3")
+
+def generate_course_image(course_title, course_id):
+    """
+    Generates a cover image for the course using Amazon Nova Canvas and uploads it to S3.
+    Returns the S3 URL of the uploaded image.
+    """
+    try:
+        # Set the model ID.
+        model_id = "amazon.nova-canvas-v1:0"
+
+        # Define the image generation prompt for the model.
+        prompt = f"A stylized, artistic, and inviting cover image for a course titled '{course_title}'. The image should be relevant to the topic and visually appealing."
+
+        # Generate a random seed between 0 and 858,993,459
+        seed = random.randint(0, 858993460)
+
+        # Format the request payload using the model's native structure.
+        native_request = {
+            "taskType": "TEXT_IMAGE",
+            "textToImageParams": {"text": prompt},
+            "imageGenerationConfig": {
+                "seed": seed,
+                "quality": "standard",
+                "height": 1024,
+                "width": 1024,
+                "numberOfImages": 1,
+            },
+        }
+
+        # Convert the native request to JSON.
+        request_body = json.dumps(native_request)
+
+        # Invoke the model with the request.
+        response = bedrock_client.invoke_model(modelId=model_id, body=request_body)
+
+        # Decode the response body.
+        model_response = json.loads(response["body"].read())
+
+        # Extract the image data.
+        base64_image_data = model_response["images"][0]
+        image_data = base64.b64decode(base64_image_data)
+
+        # Upload to S3
+        bucket_name = os.environ.get('COURSE_IMAGES_BUCKET_NAME')
+        if not bucket_name:
+            print("Error: COURSE_IMAGES_BUCKET_NAME environment variable not set.")
+            return None
+
+        # Generate a unique key for the image in S3
+        s3_key = f"course-covers/{course_id}.png"
+
+        s3_client.put_object(Bucket=bucket_name, Key=s3_key, Body=image_data, ContentType='image/png')
+        print(f"Image uploaded to s3://{bucket_name}/{s3_key}")
+
+        # Construct the public URL (assuming public read access is configured on the bucket)
+        image_url = f"https://{bucket_name}.s3.amazonaws.com/{s3_key}"
+        return image_url
+
+    except ClientError as e:
+        print(f"Bedrock or S3 Client Error generating image: {str(e)}")
+        return None
+    except Exception as e:
+        print(f"Unexpected error generating course image: {str(e)}")
+        return None
 
 def lambda_handler(event, context):
     try:
@@ -42,8 +113,7 @@ def lambda_handler(event, context):
                 'body': json.dumps({'error': f'Could not extract user ID from request context: {str(e)}'}),
                 'headers': {'Content-Type': 'application/json', "Access-Control-Allow-Origin": "*"}
             }
-        except Exception as e:
-            # Catch any other unexpected errors during user_id extraction
+        except Exception as e: # Catch any other unexpected errors during user_id extraction
             print(f"Unexpected error extracting user_id: {str(e)}")
             return {
                 'statusCode': 500, # Internal Server Error
@@ -51,27 +121,42 @@ def lambda_handler(event, context):
                 'headers': {'Content-Type': 'application/json', "Access-Control-Allow-Origin": "*"}
             }
 
-        try:
-            course_plan_str = generate_course_plan(topic, timeline, difficulty, custom_instructions)
-            if course_plan_str is None: # call_model now returns None on error
-                 raise ValueError("Failed to generate course plan from LLM: Received no content.")
-            course_plan = json.loads(course_plan_str) 
-        except json.JSONDecodeError as e: # Catch this more specific error first
-            print(f"JSONDecodeError parsing LLM output: {str(e)}")
-            return {
-                'statusCode': 502,
-                'body': json.dumps({'error': f'Failed to parse course plan from LLM: Invalid JSON format. {str(e)}'}),
-                'headers': {'Content-Type': 'application/json', "Access-Control-Allow-Origin": "*"}
-            }
-        except ValueError as e: # Catch other ValueErrors, including the one raised above
-            print(f"Error generating or parsing course plan: {str(e)}")
-            return {
-                'statusCode': 502, # Bad Gateway, as we failed to get a valid response from upstream (LLM)
-                'body': json.dumps({'error': f'Failed to generate or parse course plan from LLM: {str(e)}'}),
-                'headers': {'Content-Type': 'application/json', "Access-Control-Allow-Origin": "*"}
-            }
-        
-        course_plan['CourseID'] = str(uuid.uuid4())
+        course_id = str(uuid.uuid4()) # Generate CourseID early for parallel image generation
+
+        # Use ThreadPoolExecutor to run LLM call and image generation in parallel
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            llm_future = executor.submit(generate_course_plan, topic, timeline, difficulty, custom_instructions)
+            image_future = executor.submit(generate_course_image, topic, course_id)
+
+            try:
+                course_plan_str = llm_future.result() # Wait for LLM result
+                if course_plan_str is None: # call_model now returns None on error
+                    raise ValueError("Failed to generate course plan from LLM: Received no content.")
+                course_plan = json.loads(course_plan_str) 
+            except json.JSONDecodeError as e: # Catch this more specific error first
+                print(f"JSONDecodeError parsing LLM output: {str(e)}")
+                return {
+                    'statusCode': 502,
+                    'body': json.dumps({'error': f'Failed to parse course plan from LLM: Invalid JSON format. {str(e)}'}),
+                    'headers': {'Content-Type': 'application/json', "Access-Control-Allow-Origin": "*"}
+                }
+            except ValueError as e: # Catch other ValueErrors, including the one raised above
+                print(f"Error generating or parsing course plan: {str(e)}")
+                return {
+                    'statusCode': 502, # Bad Gateway, as we failed to get a valid response from upstream (LLM)
+                    'body': json.dumps({'error': f'Failed to generate or parse course plan from LLM: {str(e)}'}),
+                    'headers': {'Content-Type': 'application/json', "Access-Control-Allow-Origin": "*"}
+                }
+            
+            # Get image URL after course plan is generated
+            image_url = image_future.result()
+            if image_url:
+                course_plan['cover_image_url'] = image_url
+            else:
+                print("Warning: Failed to generate or upload course cover image.")
+                course_plan['cover_image_url'] = None # Or a default image URL
+
+        course_plan['CourseID'] = course_id
         course_plan['UserID'] = user_id
 
         # Initialize chapter statuses
@@ -192,6 +277,10 @@ course_plan_schema = {
         "description": {
             "type": "string",
             "description": "The description of the course plan."
+        },
+        "cover_image_url": {
+            "type": ["string", "null"],
+            "description": "The URL of the course cover image, or null if not available."
         },
         "chapters" : {
             "type": "array",

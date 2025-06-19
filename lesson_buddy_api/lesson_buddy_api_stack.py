@@ -27,6 +27,7 @@ class LessonBuddyApiStack(Stack):
             course_table=tables.table, 
             lesson_bucket=buckets.bucket,
             questions_bucket=buckets.questions_bucket, # Added questions_bucket
+            course_images_bucket=buckets.course_images_bucket, # Added course_images_bucket
             user_pool_id=authentication.user_pool.user_pool_id,
             user_pool_client_id=authentication.user_pool_client.user_pool_client_id,
             user_pool_arn=authentication.user_pool.user_pool_arn

@@ -42,7 +42,12 @@ class Functions(Construct): # Changed from Stack to Construct
             }
         )
         course_table.grant_write_data(self.generate_course_plan_function)
-        course_images_bucket.grant_write(self.generate_course_plan_function) # Grant write permissions to the new bucket        
+        course_images_bucket.grant_write(self.generate_course_plan_function) # Grant write permissions to the new bucket
+        # Grant Bedrock invoke model permissions
+        self.generate_course_plan_function.add_to_role_policy(iam.PolicyStatement(
+            actions=["bedrock:InvokeModel"],
+            resources=["*"] # Set to wildcard as per user request
+        ))
 
         # Add function to the stack from folder get_lesson_content
         self.get_lesson_content_function = _lambda.Function(

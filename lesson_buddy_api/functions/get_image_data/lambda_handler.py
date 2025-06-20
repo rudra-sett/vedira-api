@@ -2,6 +2,7 @@ import json
 import boto3
 import os
 from urllib.parse import urlparse
+import base64
 
 s3_client = boto3.client('s3')
 
@@ -12,7 +13,7 @@ def lambda_handler(event, context):
         # Extract S3 URL from query string parameters for GET request
         s3_url = None
         if 'queryStringParameters' in event and event['queryStringParameters']:
-            s3_url = event['queryStringParameters'].get('s3_url')
+            s3_url = event['queryStringParameters'].get('s3Url')
 
         if not s3_url:
             return {
@@ -61,22 +62,19 @@ def lambda_handler(event, context):
         print(f"Attempting to retrieve object from bucket: {bucket_name}, key: {s3_key}")
 
         try:
+            print(s3_key)
             # Get the object from S3
             response = s3_client.get_object(Bucket=bucket_name, Key=s3_key)
             image_data = response['Body'].read()
-            content_type = response.get('ContentType', 'application/octet-stream')
+            content_type = response.get('ContentType', 'application/octet-stream')            
 
             # Return the image data directly as a binary response
             return {
-                'statusCode': 200,
-                'body': image_data,
-                'isBase64Encoded': True, # Indicate that the body is binary and needs base64 encoding by API Gateway
-                'headers': {
-                    'Content-Type': content_type,
-                    'Access-Control-Allow-Origin': '*',
-                    'Content-Disposition': f'inline; filename="{os.path.basename(s3_key)}"'
-                }
-            }
+            'headers': { "Content-Type": content_type },
+            'statusCode': 200,
+            'body': base64.b64encode(image_data).decode('utf-8'),
+            'isBase64Encoded': True
+        }
 
         except s3_client.exceptions.NoSuchKey:
             print(f"Error: Object not found at s3://{bucket_name}/{s3_key}")

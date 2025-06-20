@@ -241,9 +241,8 @@ class LessonBuddyApiGateway(Construct):
         )
 
         # DELETE /courses/{course_id}
-        courses_resource = api.root.add_resource("courses")
-        course_id_resource = courses_resource.add_resource("{course_id}")
-        course_id_resource.add_method(
+        delete_course_resource = api.root.add_resource("delete-course")        
+        delete_course_resource.add_method(
             "DELETE",
             delete_course_integration,
             authorizer=cognito_authorizer,

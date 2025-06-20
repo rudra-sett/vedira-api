@@ -24,6 +24,19 @@ class Functions(Construct): # Changed from Stack to Construct
                  user_pool_arn: str, # Added for IAM permissions
                  **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
+
+        # Add function to the stack from folder delete_course
+        self.delete_course_function = _lambda.Function(
+            self, "DeleteCourseFunction",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            handler="lambda_handler.lambda_handler",
+            code=_lambda.Code.from_asset("lesson_buddy_api/functions/delete_course"),
+            timeout=Duration.seconds(30),
+            environment={
+                "COURSES_TABLE_NAME": course_table.table_name
+            }
+        )
+        course_table.grant_write_data(self.delete_course_function)
         
         load_dotenv() # Ensure .env is loaded for API_KEY
 

@@ -77,11 +77,13 @@ def lambda_handler(event, context):
             course_id = item.get('CourseID')
             title = item.get('title')
             description = item.get('description')
+            cover_image_url = item.get('cover_image_url', None)
             if course_id and title is not None and description is not None: # Ensure all required fields are present
                 course_list.append({
                     'CourseID': course_id,
                     'title': title,
-                    'description': description
+                    'description': description,
+                    'cover_image_url': cover_image_url
                 })
             else:
                 print(f"Warning: Skipping item due to missing fields: {item}")

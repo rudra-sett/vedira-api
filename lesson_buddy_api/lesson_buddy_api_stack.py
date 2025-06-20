@@ -56,5 +56,6 @@ class LessonBuddyApiStack(Stack):
             auth_resend_verification_code_function=functions.auth_resend_verification_code_function,
             auth_refresh_token_function=functions.auth_refresh_token_function,
             get_multiple_choice_questions_function=functions.get_multiple_choice_questions_function,
-            get_image_data_function=functions.get_image_data_function # Added
+            get_image_data_function=functions.get_image_data_function, # Added
+            delete_course_function=functions.delete_course_function # Added
         )

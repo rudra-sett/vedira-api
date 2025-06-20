@@ -28,6 +28,7 @@ class LessonBuddyApiGateway(Construct):
                  auth_refresh_token_function: _lambda.Function, # Added
                  get_multiple_choice_questions_function: _lambda.Function, # Added for new endpoint
                  get_image_data_function: _lambda.Function, # Added for new endpoint
+                 delete_course_function: _lambda.Function, # Added for new endpoint
                  **kwargs) -> None:
         super().__init__(scope, id, **kwargs)
 
@@ -108,7 +109,8 @@ class LessonBuddyApiGateway(Construct):
         check_chapter_generation_status_integration = apigw.LambdaIntegration(check_chapter_generation_status_function)
         get_multiple_choice_questions_integration = apigw.LambdaIntegration(get_multiple_choice_questions_function) # Added
         get_image_data_integration = apigw.LambdaIntegration(get_image_data_function) # Added
-        
+        delete_course_integration = apigw.LambdaIntegration(delete_course_function) # Added
+
         # Define resources and methods based on the image
 
         # /generate-chapter
@@ -236,6 +238,16 @@ class LessonBuddyApiGateway(Construct):
                     'method.response.header.Content-Disposition': True
                 }
             )]
+        )
+
+        # DELETE /courses/{course_id}
+        courses_resource = api.root.add_resource("courses")
+        course_id_resource = courses_resource.add_resource("{course_id}")
+        course_id_resource.add_method(
+            "DELETE",
+            delete_course_integration,
+            authorizer=cognito_authorizer,
+            authorization_type=apigw.AuthorizationType.COGNITO
         )
 
         self.api = api

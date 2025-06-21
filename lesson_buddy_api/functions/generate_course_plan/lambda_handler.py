@@ -11,9 +11,10 @@ from concurrent.futures import ThreadPoolExecutor
 from botocore.exceptions import ClientError # For DynamoDB error handling
 from urllib import error as urllib_error # For call_model HTTP errors
 
-# Create a Bedrock Runtime client in the AWS Region of your choice.
+# Create AWS clients
 bedrock_client = boto3.client("bedrock-runtime", region_name="us-east-1")
 s3_client = boto3.client("s3")
+sfn_client = boto3.client("stepfunctions") # Initialize Step Functions client
 
 def generate_course_image(course_title, course_id):
     """
@@ -194,6 +195,48 @@ def lambda_handler(event, context):
                 'body': json.dumps({'error': f'Could not save course plan to database: {str(e)}'}),
                 'headers': {'Content-Type': 'application/json', "Access-Control-Allow-Origin": "*"}
             }
+
+        # Trigger the Step Function for course content generation
+        step_function_arn = os.environ.get('STEP_FUNCTION_ARN')
+        if step_function_arn:
+            try:
+                # For each chapter, start a Step Function execution
+                for chapter in course_plan['chapters']:
+                    chapter_id = chapter.get('id')
+                    if chapter_id:
+                        sfn_input = {
+                            "course_id": course_id,
+                            "user_id": user_id,
+                            "chapter_id": chapter_id
+                        }
+                        sfn_client.start_execution(
+                            stateMachineArn=step_function_arn,
+                            input=json.dumps(sfn_input)
+                        )
+                        print(f"Started Step Function for chapter {chapter_id} of course {course_id}")
+                        # we only want to do it for the first chapter
+                        break
+            except ClientError as e:
+                print(f"Error starting Step Function execution: {str(e)}")
+                # Do not return error, as course plan is already saved. Log and continue.
+            except Exception as e:
+                print(f"Unexpected error triggering Step Function: {str(e)}")
+                # Do not return error, as course plan is already saved. Log and continue.
+        else:
+            print("Warning: STEP_FUNCTION_ARN environment variable not set. Step Function not triggered.")
+
+        return {
+            'statusCode': 200,
+            'body': json.dumps(course_plan),
+            'headers': {'Content-Type': 'application/json', "Access-Control-Allow-Origin": "*"}
+        }
+    except Exception as e: # Catch-all for any other unexpected errors
+        print(f"Unexpected error in lambda_handler: {str(e)}")        
+        return {
+            'statusCode': 500,
+            'body': json.dumps({'error': f'An unexpected server error occurred: {str(e)}'}),
+            'headers': {'Content-Type': 'application/json', "Access-Control-Allow-Origin": "*"}
+        }
 
         return {
             'statusCode': 200,

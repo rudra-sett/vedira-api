@@ -51,7 +51,8 @@ class Functions(Construct): # Changed from Stack to Construct
                 "API_KEY": os.environ.get("API_KEY", ""),
                 "BEDROCK_API_KEY": os.environ.get("BEDROCK_API_KEY", ""),
                 "COURSE_TABLE_NAME": course_table.table_name,
-                "COURSE_IMAGES_BUCKET_NAME": course_images_bucket.bucket_name # Added
+                "COURSE_IMAGES_BUCKET_NAME": course_images_bucket.bucket_name,
+                "STEP_FUNCTION_ARN": self.course_generation_sfn.state_machine_arn # Pass Step Function ARN
             }
         )
         course_table.grant_write_data(self.generate_course_plan_function)
@@ -60,6 +61,11 @@ class Functions(Construct): # Changed from Stack to Construct
         self.generate_course_plan_function.add_to_role_policy(iam.PolicyStatement(
             actions=["bedrock:InvokeModel"],
             resources=["*"] # Set to wildcard as per user request
+        ))
+        # Grant permission to start Step Function executions
+        self.generate_course_plan_function.add_to_role_policy(iam.PolicyStatement(
+            actions=["states:StartExecution"],
+            resources=[self.course_generation_sfn.state_machine_arn]
         ))
 
         # Add function to the stack from folder get_lesson_content

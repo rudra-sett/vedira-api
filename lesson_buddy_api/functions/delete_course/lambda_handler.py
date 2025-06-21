@@ -9,7 +9,7 @@ def lambda_handler(event, context):
     print(f"Received event: {event}")
 
     try:
-        course_id = event['pathParameters']['course_id']
+        course_id = event['queryStringParameters']['course_id']
     except (KeyError, TypeError):
         return {
             'statusCode': 400,
@@ -17,7 +17,7 @@ def lambda_handler(event, context):
                 'Content-Type': 'application/json',
                 'Access-Control-Allow-Origin': '*'
             },
-            'body': json.dumps({'message': 'Missing course_id in path parameters'})
+            'body': json.dumps({'message': 'Missing course_id in queryStringParameters'})
         }
 
     user_id = None

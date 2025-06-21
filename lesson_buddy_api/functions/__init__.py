@@ -38,35 +38,7 @@ class Functions(Construct): # Changed from Stack to Construct
         )
         course_table.grant_write_data(self.delete_course_function)
         
-        load_dotenv() # Ensure .env is loaded for API_KEY
-
-        # Add function to the stack from folder generate_course
-        self.generate_course_plan_function = _lambda.Function(
-            self, "GenerateCourseFunction",
-            runtime=_lambda.Runtime.PYTHON_3_13,
-            handler="lambda_handler.lambda_handler",
-            code=_lambda.Code.from_asset("lesson_buddy_api/functions/generate_course_plan"),
-            timeout=Duration.minutes(15),
-            environment={
-                "API_KEY": os.environ.get("API_KEY", ""),
-                "BEDROCK_API_KEY": os.environ.get("BEDROCK_API_KEY", ""),
-                "COURSE_TABLE_NAME": course_table.table_name,
-                "COURSE_IMAGES_BUCKET_NAME": course_images_bucket.bucket_name,
-                "STEP_FUNCTION_ARN": self.course_generation_sfn.state_machine_arn # Pass Step Function ARN
-            }
-        )
-        course_table.grant_write_data(self.generate_course_plan_function)
-        course_images_bucket.grant_write(self.generate_course_plan_function) # Grant write permissions to the new bucket
-        # Grant Bedrock invoke model permissions
-        self.generate_course_plan_function.add_to_role_policy(iam.PolicyStatement(
-            actions=["bedrock:InvokeModel"],
-            resources=["*"] # Set to wildcard as per user request
-        ))
-        # Grant permission to start Step Function executions
-        self.generate_course_plan_function.add_to_role_policy(iam.PolicyStatement(
-            actions=["states:StartExecution"],
-            resources=[self.course_generation_sfn.state_machine_arn]
-        ))
+        load_dotenv() # Ensure .env is loaded for API_KEY        
 
         # Add function to the stack from folder get_lesson_content
         self.get_lesson_content_function = _lambda.Function(
@@ -727,3 +699,31 @@ class Functions(Construct): # Changed from Stack to Construct
 
         for lambda_func in lambda_functions_to_invoke:
             lambda_func.grant_invoke(self.course_generation_sfn.role)
+        
+        # Add function to the stack from folder generate_course
+        self.generate_course_plan_function = _lambda.Function(
+            self, "GenerateCourseFunction",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            handler="lambda_handler.lambda_handler",
+            code=_lambda.Code.from_asset("lesson_buddy_api/functions/generate_course_plan"),
+            timeout=Duration.minutes(15),
+            environment={
+                "API_KEY": os.environ.get("API_KEY", ""),
+                "BEDROCK_API_KEY": os.environ.get("BEDROCK_API_KEY", ""),
+                "COURSE_TABLE_NAME": course_table.table_name,
+                "COURSE_IMAGES_BUCKET_NAME": course_images_bucket.bucket_name,
+                "STEP_FUNCTION_ARN": self.course_generation_sfn.state_machine_arn # Pass Step Function ARN
+            }
+        )
+        course_table.grant_write_data(self.generate_course_plan_function)
+        course_images_bucket.grant_write(self.generate_course_plan_function) # Grant write permissions to the new bucket
+        # Grant Bedrock invoke model permissions
+        self.generate_course_plan_function.add_to_role_policy(iam.PolicyStatement(
+            actions=["bedrock:InvokeModel"],
+            resources=["*"] # Set to wildcard as per user request
+        ))
+        # Grant permission to start Step Function executions
+        self.generate_course_plan_function.add_to_role_policy(iam.PolicyStatement(
+            actions=["states:StartExecution"],
+            resources=[self.course_generation_sfn.state_machine_arn]
+        ))

@@ -238,19 +238,6 @@ def lambda_handler(event, context):
             'headers': {'Content-Type': 'application/json', "Access-Control-Allow-Origin": "*"}
         }
 
-        return {
-            'statusCode': 200,
-            'body': json.dumps(course_plan),
-            'headers': {'Content-Type': 'application/json', "Access-Control-Allow-Origin": "*"}
-        }
-    except Exception as e: # Catch-all for any other unexpected errors
-        print(f"Unexpected error in lambda_handler: {str(e)}")        
-        return {
-            'statusCode': 500,
-            'body': json.dumps({'error': f'An unexpected server error occurred: {str(e)}'}),
-            'headers': {'Content-Type': 'application/json', "Access-Control-Allow-Origin": "*"}
-        }
-
 
 def call_model(prompt, endpoint, api_key, model, tools=None):    
     if not api_key:

@@ -2,6 +2,7 @@ import json
 import os
 import boto3
 import logging
+from decimal import Decimal
 from botocore.exceptions import ClientError
 
 # Configure logging
@@ -10,6 +11,16 @@ logger.setLevel(logging.INFO)
 
 # Initialize DynamoDB client
 dynamodb = boto3.resource('dynamodb')
+
+def decimal_to_int(obj):
+    """Convert Decimal objects to int for JSON serialization"""
+    if isinstance(obj, Decimal):
+        return int(obj)
+    elif isinstance(obj, dict):
+        return {k: decimal_to_int(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [decimal_to_int(v) for v in obj]
+    return obj
 
 def lambda_handler(event, context):
     """
@@ -93,19 +104,25 @@ def lambda_handler(event, context):
                 }
                 flashcards.append(flashcard)
             
+            # Convert Decimal objects to int for JSON serialization
+            flashcards = decimal_to_int(flashcards)
+            
             # Sort by card number to ensure proper order
             flashcards.sort(key=lambda x: x.get('cardNumber', 0))
             
             logger.info(f"Successfully retrieved {len(flashcards)} flashcards for lesson {lesson_id}")
+            
+            response_data = {
+                "flashcards": flashcards,
+                "count": len(flashcards),
+                "courseId": course_id,
+                "chapterId": chapter_id,
+                "lessonId": lesson_id
+            }
+            
             return {
                 "statusCode": 200,
-                "body": json.dumps({
-                    "flashcards": flashcards,
-                    "count": len(flashcards),
-                    "courseId": course_id,
-                    "chapterId": chapter_id,
-                    "lessonId": lesson_id
-                }),
+                "body": json.dumps(response_data),
                 "headers": {
                     "Content-Type": "application/json",
                     "Access-Control-Allow-Origin": "*",

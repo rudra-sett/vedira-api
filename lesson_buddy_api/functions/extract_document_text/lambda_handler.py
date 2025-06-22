@@ -12,26 +12,28 @@ except ImportError:
     logging.warning("python-docx not installed. DOCX parsing will not be available.")
 
 try:
-    from PyPDF2 import PdfReader
+    import pymupdf # PyMuPDF
 except ImportError:
-    PdfReader = None
-    logging.warning("PyPDF2 not installed. PDF parsing will not be available.")
+    pymupdf = None
+    logging.warning("PyMuPDF not installed. PDF parsing will not be available.")
 
 logger = logging.getLogger()
 logger.setLevel(os.environ.get("LOG_LEVEL", "INFO"))
 
 def extract_text_from_pdf(file_stream):
-    """Extracts text from a PDF file stream."""
-    if PdfReader is None:
-        raise ImportError("PyPDF2 is not installed. Cannot process PDF files.")
+    """Extracts text from a PDF file stream using PyMuPDF."""
+    if pymupdf is None:
+        raise ImportError("PyMuPDF is not installed. Cannot process PDF files.")
     
     text = ""
     try:
-        reader = PdfReader(file_stream)
-        for page in reader.pages:
-            text += page.extract_text() + "\n"
+        # PyMuPDF can open directly from a bytes stream
+        doc = pymupdf.open(stream=file_stream.read(), filetype="pdf")
+        for page in doc:
+            text += page.get_text() + "\n"
+        doc.close()
     except Exception as e:
-        logger.error(f"Error extracting text from PDF: {e}")
+        logger.error(f"Error extracting text from PDF with PyMuPDF: {e}")
         raise
     return text
 
@@ -55,10 +57,10 @@ def lambda_handler(event, context):
     Lambda function to extract text from various document types.
     Expects a JSON body with 'document_content' (base64 encoded) and 'content_type'.
     """
-    try:
-        body = json.loads(event['body'])
-        document_content_b64 = body.get('document_content')
-        content_type = body.get('content_type', '').lower()
+    try:        
+        print("Received event:", json.dumps(event, indent=2))
+        document_content_b64 = event.get('document_content')
+        content_type = event.get('content_type', '').lower()
 
         if not document_content_b64:
             return {

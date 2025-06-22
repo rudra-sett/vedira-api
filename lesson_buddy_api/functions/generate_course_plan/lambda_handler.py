@@ -92,7 +92,8 @@ def lambda_handler(event, context):
         timeline = data.get('timeline', '2 months')
         difficulty = data.get('difficulty','easy')
         custom_instructions = data.get('custom_instructions', None)
-        # user_id = data.get('user_id', None) # User ID will be extracted from the auth token
+        document_content = data.get('document_content', None) # New: Base64 encoded document content
+        document_type = data.get('document_type', None)       # New: MIME type of the document (e.g., 'image/png', 'application/pdf')
 
         # Extract User ID from the event context
         try:
@@ -126,7 +127,7 @@ def lambda_handler(event, context):
 
         # Use ThreadPoolExecutor to run LLM call and image generation in parallel
         with ThreadPoolExecutor(max_workers=2) as executor:
-            llm_future = executor.submit(generate_course_plan, topic, timeline, difficulty, custom_instructions)
+            llm_future = executor.submit(generate_course_plan, topic, timeline, difficulty, custom_instructions, document_content, document_type)
             image_future = executor.submit(generate_course_image, topic, course_id)
 
             try:
@@ -385,14 +386,14 @@ tools = [
             "type": "function",
             "function": {
             "name": "generate_course_plan",
-            "description": "Output a JSON object representing a course plan based on the provided topic, timeline, difficulty, and custom instructions.",
+            "description": "Output a JSON object representing a course plan based on the provided topic, timeline, difficulty, custom instructions, and optionally, document content.",
             "parameters": course_plan_schema
             }
         }
     ]
 use_google = False
 
-def generate_course_plan(topic, timeline, difficulty, custom_instructions):
+def generate_course_plan(topic, timeline, difficulty, custom_instructions, document_content, document_type):
     system_prompt = f"""
     You are a course assistant that helps students to create a course plan based on their topic, timeline and difficulty.
     Output a JSON object representing the course plan with the provided schema. 
@@ -401,6 +402,11 @@ def generate_course_plan(topic, timeline, difficulty, custom_instructions):
     Timeline: {timeline}
     Difficulty: {difficulty}
     Custom Instructions: {custom_instructions}
+    """
+    if document_content and document_type:
+        system_prompt += f"""
+    Additional Context (Document Content - Type: {document_type}):
+    {document_content}
     """
     if use_google:
         endpoint = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'

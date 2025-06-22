@@ -697,6 +697,27 @@ class Functions(Construct): # Changed from Stack to Construct
         )        
         course_images_bucket.grant_read(self.get_image_data_function) # Grant read permissions to the course images bucket        
 
+        # Add function to the stack from folder extract_document_text
+        self.extract_document_text_function = _lambda.Function(
+            self, "ExtractDocumentTextFunction",
+            runtime=_lambda.Runtime.PYTHON_3_13, # Keep runtime as Python 3.13
+            handler="lambda_handler.lambda_handler",
+            code=_lambda.Code.from_asset(
+                "lesson_buddy_api/functions/extract_document_text",
+                bundling={
+                    "image": _lambda.Runtime.PYTHON_3_13.bundling_image, # Use the bundling image for Python 3.13
+                    "command": [
+                        "bash",
+                        "-c",
+                        "pip install -r requirements.txt -t /asset-output && cp -au . /asset-output"
+                    ],
+                    "user": "root", # Run as root to ensure permissions for installing packages
+                }
+            ),
+            timeout=Duration.minutes(1), # Document extraction should be relatively quick
+            memory_size=256 # Increase memory for potential larger documents
+        )
+
         for lambda_func in lambda_functions_to_invoke:
             lambda_func.grant_invoke(self.course_generation_sfn.role)
         

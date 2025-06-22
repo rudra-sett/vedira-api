@@ -20,3 +20,5 @@ six==1.17.0
 typeguard==2.13.3
 typing_extensions==4.13.2
 urllib3==2.4.0
+python-docx
+PyPDF2

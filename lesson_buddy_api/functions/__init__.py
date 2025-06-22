@@ -152,7 +152,7 @@ class Functions(Construct): # Changed from Stack to Construct
                 "FLASHCARDS_TABLE_NAME": flashcards_table.table_name
             }
         )
-        flashcards_table.grant_write_data(self.generate_flashcards_function)
+        flashcards_table.grant_read_write_data(self.generate_flashcards_function)
         lesson_bucket.grant_read(self.generate_flashcards_function)
 
         # Add function to the stack from folder get_flashcards

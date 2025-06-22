@@ -28,6 +28,7 @@ class LessonBuddyApiStack(Stack):
             lesson_bucket=buckets.bucket,
             questions_bucket=buckets.questions_bucket, # Added questions_bucket
             course_images_bucket=buckets.course_images_bucket, # Added course_images_bucket
+            flashcards_table=tables.flashcards_table, # Added flashcards_table
             user_pool_id=authentication.user_pool.user_pool_id,
             user_pool_client_id=authentication.user_pool_client.user_pool_client_id,
             user_pool_arn=authentication.user_pool.user_pool_arn
@@ -56,6 +57,7 @@ class LessonBuddyApiStack(Stack):
             auth_resend_verification_code_function=functions.auth_resend_verification_code_function,
             auth_refresh_token_function=functions.auth_refresh_token_function,
             get_multiple_choice_questions_function=functions.get_multiple_choice_questions_function,
+            get_flashcards_function=functions.get_flashcards_function, # Added flashcards function
             get_image_data_function=functions.get_image_data_function, # Added
             delete_course_function=functions.delete_course_function # Added
         )

@@ -27,6 +27,7 @@ class LessonBuddyApiGateway(Construct):
                  auth_resend_verification_code_function: _lambda.Function, # Added
                  auth_refresh_token_function: _lambda.Function, # Added
                  get_multiple_choice_questions_function: _lambda.Function, # Added for new endpoint
+                 get_flashcards_function: _lambda.Function, # Added for flashcards endpoint
                  get_image_data_function: _lambda.Function, # Added for new endpoint
                  delete_course_function: _lambda.Function, # Added for new endpoint
                  **kwargs) -> None:
@@ -108,6 +109,7 @@ class LessonBuddyApiGateway(Construct):
         get_lesson_plan_integration = apigw.LambdaIntegration(get_lesson_plan_function)
         check_chapter_generation_status_integration = apigw.LambdaIntegration(check_chapter_generation_status_function)
         get_multiple_choice_questions_integration = apigw.LambdaIntegration(get_multiple_choice_questions_function) # Added
+        get_flashcards_integration = apigw.LambdaIntegration(get_flashcards_function) # Added for flashcards
         get_image_data_integration = apigw.LambdaIntegration(get_image_data_function) # Added
         delete_course_integration = apigw.LambdaIntegration(delete_course_function) # Added
 
@@ -219,6 +221,15 @@ class LessonBuddyApiGateway(Construct):
         questions_resource.add_method(
             "GET",
             get_multiple_choice_questions_integration,
+            authorizer=cognito_authorizer,
+            authorization_type=apigw.AuthorizationType.COGNITO,            
+        )
+
+        # GET /flashcards (Protected by Cognito Authorizer, expects query params)
+        flashcards_resource = api.root.add_resource("flashcards")
+        flashcards_resource.add_method(
+            "GET",
+            get_flashcards_integration,
             authorizer=cognito_authorizer,
             authorization_type=apigw.AuthorizationType.COGNITO,            
         )

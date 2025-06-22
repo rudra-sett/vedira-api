@@ -174,6 +174,7 @@ def lambda_handler(event, context):
                 chapters_status[chapter_id] = {
                     'lessons_status': 'PENDING',
                     'mcqs_status': 'PENDING',
+                    'flashcards_status': 'PENDING',
                     'last_updated': timestamp
                 }
         course_plan['chapters_status'] = chapters_status

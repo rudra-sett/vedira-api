@@ -129,6 +129,7 @@ def handler(event, context):
                     
                     lessons_status = chapter_specific_statuses.get('lessons_status', 'PENDING')
                     mcqs_status = chapter_specific_statuses.get('mcqs_status', 'PENDING')
+                    flashcards_status = chapter_specific_statuses.get('flashcards_status', 'PENDING')
                     last_updated = chapter_specific_statuses.get('last_updated', None)
                     
                     result['chapter_generation_status'] = {
@@ -137,6 +138,7 @@ def handler(event, context):
                         'user_id': event_user_id, # Include user_id in response for clarity
                         'lessons_status': lessons_status,
                         'mcqs_status': mcqs_status,
+                        'flashcards_status': flashcards_status,
                         'last_updated': last_updated
                     }
                 except ClientError as db_e:

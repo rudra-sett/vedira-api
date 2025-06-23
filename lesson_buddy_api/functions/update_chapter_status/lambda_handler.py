@@ -35,10 +35,10 @@ def lambda_handler(event, context):
                 'body': json.dumps({'error': 'Missing required parameters: course_id, user_id, chapter_id, status_type, or new_status from event payload'})
             }
 
-        if status_type not in ["lessons", "mcqs"]:
+        if status_type not in ["lessons", "mcqs", "flashcards"]:
             return {
                 'statusCode': 400,
-                'body': json.dumps({'error': 'Invalid status_type. Must be "lessons" or "mcqs".'})
+                'body': json.dumps({'error': 'Invalid status_type. Must be "lessons", "mcqs", or "flashcards".'})
             }
         
         if new_status not in ["PENDING", "GENERATING", "COMPLETED", "FAILED"]:

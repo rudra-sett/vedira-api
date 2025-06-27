@@ -131,10 +131,9 @@ def lambda_handler(event, context):
             image_future = executor.submit(generate_course_image, topic, course_id)
 
             try:
-                course_plan_str = llm_future.result() # Wait for LLM result
-                if course_plan_str is None: # call_model now returns None on error
-                    raise ValueError("Failed to generate course plan from LLM: Received no content.")
-                course_plan = json.loads(course_plan_str) 
+                course_plan = llm_future.result() # Wait for LLM result
+                if course_plan is None: # call_model now returns None on error
+                    raise ValueError("Failed to generate course plan from LLM: Received no content.")                
             except json.JSONDecodeError as e: # Catch this more specific error first
                 print(f"JSONDecodeError parsing LLM output: {str(e)}")
                 return {
@@ -353,6 +352,12 @@ def generate_course_plan(topic, timeline, difficulty, custom_instructions, docum
     """    
         
     # output = call_model(system_prompt, endpoint, api_key, model, tools = tools) # Pass tools to the model call
+    try:
+        decoded_document = base64.b64decode(document_content)
+    except Exception as e:
+        print("Failed to decode base64 string: %s", e)
+        # Handle the error appropriately, maybe raise a ValueError
+        raise ValueError("Invalid base64 string provided.") from e
 
     messages = [
         {
@@ -365,23 +370,46 @@ def generate_course_plan(topic, timeline, difficulty, custom_instructions, docum
                     "document": {
                         "name": "input_document",
                         "format": document_type,
-                        "source": document_content
+                        "source": {
+                            "bytes": decoded_document
+                        }
                 }
                 }
             ]
         }]
+
+    tool_config = {
+    "tools": [
+        {
+            "toolSpec": {
+                "name": "top_song",
+                "description": "Get the most popular song played on a radio station.",
+                "inputSchema": {
+                    "json": course_plan_schema
+                }
+            }
+        }
+    ]
+}
     
-    response = bedrock_client.invoke_model(
+    response = bedrock_client.converse(
         modelId="us.anthropic.claude-sonnet-4-20250514-v1:0",
         messages=messages,
+        toolConfig=tool_config,
+        inferenceConfig={
+            "maxTokens": 8192,
+            "temperature": 0.5,
+            # "topP": 0.5
+        }
     )
     output = response['output']['message']['content']
 
     print(output)
     
-    if output is not None and 'tool_calls' in output and output['tool_calls'] is not None:        
-        for tool_call in output['tool_calls']:
-            return tool_call['function']['arguments']
-    else:
-        print(f"Error: LLM did not return a valid tool call. Output: {output}")
-        return None
+    for block in output:
+        if 'toolUse' in block:
+            tool_call = block['toolUse']['input']
+            return tool_call
+
+    print(f"Error: LLM did not return a valid tool call. Output: {output}")
+    return None

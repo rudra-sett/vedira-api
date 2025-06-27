@@ -19,6 +19,7 @@ class Functions(Construct): # Changed from Stack to Construct
                  lesson_bucket: s3.IBucket,
                  questions_bucket: s3.IBucket, # Added questions_bucket
                  course_images_bucket: s3.IBucket, # Added course_images_bucket
+                 flashcards_table: dynamodb.ITable, # Added flashcards_table
                  user_pool_id: str, # Added
                  user_pool_client_id: str, # Added
                  user_pool_arn: str, # Added for IAM permissions
@@ -137,6 +138,35 @@ class Functions(Construct): # Changed from Stack to Construct
             }
         )
         questions_bucket.grant_read(self.get_multiple_choice_questions_function)
+
+        # Add function to the stack from folder generate_flashcards
+        self.generate_flashcards_function = _lambda.Function(
+            self, "GenerateFlashcardsFunction",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            handler="lambda_handler.lambda_handler",
+            code=_lambda.Code.from_asset("lesson_buddy_api/functions/generate_flashcards"),
+            timeout=Duration.minutes(5),
+            environment={
+                "API_KEY": os.environ.get("API_KEY", ""), 
+                "BEDROCK_API_KEY": os.environ.get("BEDROCK_API_KEY", ""),
+                "FLASHCARDS_TABLE_NAME": flashcards_table.table_name
+            }
+        )
+        flashcards_table.grant_read_write_data(self.generate_flashcards_function)
+        lesson_bucket.grant_read(self.generate_flashcards_function)
+
+        # Add function to the stack from folder get_flashcards
+        self.get_flashcards_function = _lambda.Function(
+            self, "GetFlashcardsFunction",
+            runtime=_lambda.Runtime.PYTHON_3_13,
+            handler="lambda_handler.lambda_handler",
+            code=_lambda.Code.from_asset("lesson_buddy_api/functions/get_flashcards"),
+            timeout=Duration.minutes(1),
+            environment={
+                "FLASHCARDS_TABLE_NAME": flashcards_table.table_name
+            }
+        )
+        flashcards_table.grant_read_data(self.get_flashcards_function)
 
         # Add function to the stack from folder update_chapter_status (renamed from mark_lesson_generated)
         self.update_chapter_status_function = _lambda.Function(
@@ -659,6 +689,153 @@ class Functions(Construct): # Changed from Stack to Construct
                         "End": True
                         }
                     }
+                    },
+                    {
+                    "StartAt": "Mark Flashcards as Generating",
+                    "States": {
+                        "Mark Flashcards as Generating": {
+                        "Type": "Task",
+                        "Resource": "arn:aws:states:::lambda:invoke",
+                        "Output": "{% $states.input %}",
+                        "Arguments": {
+                            "FunctionName": self.update_chapter_status_function.function_arn,
+                            "Payload": {
+                            "course_id": "{% $course_id %}",
+                            "user_id": "{% $user_id %}",
+                            "chapter_id": "{% $chapter_id %}",
+                            "status_type": "flashcards",
+                            "new_status": "GENERATING"
+                            }
+                        },
+                        "Retry": [
+                            {
+                            "ErrorEquals": [
+                                "States.TaskFailed",
+                                "Sandbox.Timedout",
+                                "Lambda.ServiceException",
+                                "Lambda.AWSLambdaException",
+                                "Lambda.SdkClientException",
+                                "Lambda.TooManyRequestsException"
+                            ],
+                            "IntervalSeconds": 1,
+                            "MaxAttempts": 3,
+                            "BackoffRate": 2,
+                            "JitterStrategy": "FULL"
+                            }
+                        ],
+                        "Next": "Generate Flashcards for Each Lesson"
+                        },
+                        "Generate Flashcards for Each Lesson": {
+                        "Type": "Map",
+                        "ItemProcessor": {
+                            "ProcessorConfig": {
+                            "Mode": "INLINE"
+                            },
+                            "StartAt": "Generate Flashcards",
+                            "States": {
+                            "Generate Flashcards": {
+                                "Type": "Task",
+                                "Resource": "arn:aws:states:::lambda:invoke",
+                                "Output": "{% $states.result.Payload %}",
+                                "Arguments": {
+                                "FunctionName": self.generate_flashcards_function.function_arn,
+                                "Payload": "{% $states.input %}"
+                                },
+                                "Retry": [
+                                {
+                                    "ErrorEquals": [
+                                    "States.TaskFailed",
+                                    "Sandbox.Timedout",
+                                    "Lambda.ServiceException",
+                                    "Lambda.AWSLambdaException",
+                                    "Lambda.SdkClientException",
+                                    "Lambda.TooManyRequestsException"
+                                    ],
+                                    "IntervalSeconds": 1,
+                                    "MaxAttempts": 3,
+                                    "BackoffRate": 2,
+                                    "JitterStrategy": "FULL"
+                                }
+                                ],
+                                "End": True
+                            }
+                            }
+                        },
+                        "Next": "Save Flashcards State to DynamoDB",
+                        "Catch": [
+                            {
+                            "ErrorEquals": [
+                                "States.Timeout",
+                                "States.TaskFailed",
+                                "Execution"
+                            ],
+                            "Next": "Save FAILED Flashcards State to DynamoDB"
+                            }
+                        ]
+                        },
+                        "Save FAILED Flashcards State to DynamoDB": {
+                        "Type": "Task",
+                        "Resource": "arn:aws:states:::lambda:invoke",
+                        "Output": "{% $states.result.Payload %}",
+                        "Arguments": {
+                            "FunctionName": f"{self.update_chapter_status_function.function_arn}:$LATEST",
+                            "Payload": {
+                            "course_id": "{% $course_id %}",
+                            "user_id": "{% $user_id %}",
+                            "chapter_id": "{% $chapter_id %}",
+                            "status_type": "flashcards",
+                            "new_status": "FAILED"
+                            }
+                        },
+                        "Retry": [
+                            {
+                            "ErrorEquals": [
+                                "Lambda.ServiceException",
+                                "Lambda.AWSLambdaException",
+                                "Lambda.SdkClientException",
+                                "Lambda.TooManyRequestsException"
+                            ],
+                            "IntervalSeconds": 1,
+                            "MaxAttempts": 3,
+                            "BackoffRate": 2,
+                            "JitterStrategy": "FULL"
+                            }
+                        ],
+                        "End": True
+                        },
+                        "Save Flashcards State to DynamoDB": {
+                        "Type": "Task",
+                        "Resource": "arn:aws:states:::lambda:invoke",
+                        "Output": "{% $states.result.Payload %}",
+                        "Arguments": {
+                            "FunctionName": self.update_chapter_status_function.function_arn,
+                            "Payload": {
+                            "course_id": "{% $course_id %}",
+                            "user_id": "{% $user_id %}",
+                            "chapter_id": "{% $chapter_id %}",
+                            "status_type": "flashcards",
+                            "new_status": "COMPLETED"
+                            }
+                        },
+                        "Retry": [
+                            {
+                            "ErrorEquals": [
+                                "States.TaskFailed",
+                                "Sandbox.Timedout",
+                                "Lambda.ServiceException",
+                                "Lambda.AWSLambdaException",
+                                "Lambda.SdkClientException",
+                                "Lambda.TooManyRequestsException"
+                            ],
+                            "IntervalSeconds": 1,
+                            "MaxAttempts": 3,
+                            "BackoffRate": 2,
+                            "JitterStrategy": "FULL"
+                            }
+                        ],
+                        "End": True
+                        }
+                    }
                     }
                 ],
                 "End": True
@@ -681,7 +858,8 @@ class Functions(Construct): # Changed from Stack to Construct
             self.generate_lesson_content_function,
             self.fix_lesson_markdown_function,
             self.update_chapter_status_function, # Renamed from mark_lesson_generated_function
-            self.generate_multiple_choice_questions_function # Added new function
+            self.generate_multiple_choice_questions_function, # Added new function
+            self.generate_flashcards_function # Added flashcards function
         ]
 
         # Add function to the stack from folder get_image_data

@@ -31,3 +31,18 @@ class Tables(Construct):
             )
             # You can specify read/write capacity if not using PAY_PER_REQUEST for the GSI
         )
+
+        # Add Flashcards Table
+        self.flashcards_table = dynamodb.Table(
+            self, "FlashcardsTable",
+            partition_key=dynamodb.Attribute(
+                name="LessonFlashcardId", 
+                type=dynamodb.AttributeType.STRING
+            ),
+            sort_key=dynamodb.Attribute(
+                name="CardId",
+                type=dynamodb.AttributeType.STRING
+            ),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            removal_policy=RemovalPolicy.DESTROY
+        )

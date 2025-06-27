@@ -14,7 +14,9 @@
 
 ## 🏗️ **Project Overview**
 
-VEDIRA API is a serverless educational platform built on AWS that generates AI-powered course content, including lessons, multiple-choice questions, and flashcards. The system uses **AWS Lambda as the primary compute service** with AWS CDK for infrastructure as code, leveraging multiple AWS services for a complete learning management solution.
+VEDIRA API is the **backend serverless platform** built on AWS that generates AI-powered course content, including lessons, multiple-choice questions, and flashcards. This backend serves the VEDIRA mobile app (separate repository: `lesson-buddy`) and uses **AWS Lambda as the primary compute service** with AWS CDK for infrastructure as code, leveraging multiple AWS services for a complete learning management solution.
+
+> **🔗 Architecture**: This is the **backend AWS Lambda API** that serves the **frontend Flutter app** (lesson-buddy repository)
 
 ### **Why AWS Lambda?**
 - **Core Requirement**: All application logic runs on Lambda functions

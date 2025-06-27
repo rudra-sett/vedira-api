@@ -849,7 +849,7 @@ class Functions(Construct): # Changed from Stack to Construct
         self.course_generation_sfn = sfn.StateMachine(
             self, "ChapterGenerationStateMachine",
             definition_body=sfn.DefinitionBody.from_string(step_function_definition_str),
-            state_machine_name="CourseGenerationStateMachine", # Added a more descriptive name
+            state_machine_name=" CourseGenerationStateMachine", # Added a more descriptive name
             state_machine_type=sfn.StateMachineType.STANDARD
         )
         

@@ -240,59 +240,6 @@ def lambda_handler(event, context):
         }
 
 
-def call_model(prompt, endpoint, api_key, model, tools=None):    
-    if not api_key:
-        # This check is important here as call_model is a standalone utility
-        print("Error in call_model: API_KEY environment variable not set.")
-        # Return None, lambda_handler will catch this and raise ValueError
-        return None 
-            
-    data = {
-        "model": model,
-        "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 8192        
-    }
-    
-    if tools:
-        data['tools'] = tools
-
-    print(data)
-
-    data_bytes = json.dumps(data).encode('utf-8')
-    
-    req = request.Request(endpoint, data=data_bytes)
-    req.add_header('Content-Type', 'application/json')
-    req.add_header('Authorization', f'Bearer {api_key}')
-    
-    try:
-        with request.urlopen(req) as resp:
-            if resp.status == 200:
-                content = resp.read()
-                output = json.loads(content)
-                if output.get('choices') and output['choices'][0].get('message') and 'content' in output['choices'][0]['message']:
-                    return output['choices'][0]['message']
-                else:
-                    print(f"LLM response missing expected structure: {output}")
-                    # Return None, lambda_handler will catch this
-                    return None
-            else:
-                error_content = resp.read().decode('utf-8')
-                print(f"LLM API HTTP Error: {resp.status} - {resp.reason}. Response: {error_content}")
-                return None # Indicate failure
-                
-    except urllib_error.HTTPError as e:
-        error_body = e.read().decode('utf-8') if e.fp else str(e)
-        print(f"HTTPError calling LLM: {e.code} - {e.reason}. Body: {error_body}")
-        return None
-    except urllib_error.URLError as e:
-        print(f"URLError calling LLM: {e.reason}")
-        return None
-    except json.JSONDecodeError as e:
-        print(f"JSONDecodeError parsing LLM response: {e}")
-        return None
-    except Exception as e: 
-        print(f"Unexpected error in call_model: {e}")
-        return None
 
 course_plan_schema = {
     "type": "object",
@@ -402,23 +349,35 @@ def generate_course_plan(topic, timeline, difficulty, custom_instructions, docum
     Timeline: {timeline}
     Difficulty: {difficulty}
     Custom Instructions: {custom_instructions}
-    """
-    if document_content and document_type:
-        system_prompt += f"""
-    Additional Context (Document Content - Type: {document_type}):
-    {document_content}
-    """
-    if use_google:
-        endpoint = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'
-        model = "gemini-2.0-flash"
-        api_key = os.environ['API_KEY']
-    else:
+    """    
         
-        endpoint = 'http://Bedroc-Proxy-xVtSm3tV6xYe-1727257641.us-east-1.elb.amazonaws.com/api/v1/chat/completions'
-        api_key = os.environ['BEDROCK_API_KEY']
-        model = 'us.anthropic.claude-3-5-haiku-20241022-v1:0'
-        
-    output = call_model(system_prompt, endpoint, api_key, model, tools = tools) # Pass tools to the model call
+    # output = call_model(system_prompt, endpoint, api_key, model, tools = tools) # Pass tools to the model call
+
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "text": system_prompt
+                },
+                {
+                    "document": {
+                        "name": "input_document",
+                        "format": document_type,
+                        "source": document_content
+                }
+                }
+            ]
+        }]
+    
+    response = bedrock_client.invoke_model(
+        modelId="us.anthropic.claude-sonnet-4-20250514-v1:0",
+        messages=messages,
+    )
+    output = response['output']['message']['content']
+
+    print(output)
+    
     if output is not None and 'tool_calls' in output and output['tool_calls'] is not None:        
         for tool_call in output['tool_calls']:
             return tool_call['function']['arguments']

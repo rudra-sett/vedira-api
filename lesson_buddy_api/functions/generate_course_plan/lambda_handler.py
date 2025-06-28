@@ -352,31 +352,43 @@ def generate_course_plan(topic, timeline, difficulty, custom_instructions, docum
     """    
         
     # output = call_model(system_prompt, endpoint, api_key, model, tools = tools) # Pass tools to the model call
-    try:
-        decoded_document = base64.b64decode(document_content)
-    except Exception as e:
-        print("Failed to decode base64 string: %s", e)
-        # Handle the error appropriately, maybe raise a ValueError
-        raise ValueError("Invalid base64 string provided.") from e
+    if document_content:
+        try:
+            decoded_document = base64.b64decode(document_content)
+        except Exception as e:
+            print("Failed to decode base64 string: %s", e)
+            # Handle the error appropriately, maybe raise a ValueError
+            raise ValueError("Invalid base64 string provided.") from e
 
-    messages = [
-        {
-            "role": "user",
-            "content": [
-                {
-                    "text": system_prompt
-                },
-                {
-                    "document": {
-                        "name": "input_document",
-                        "format": document_type,
-                        "source": {
-                            "bytes": decoded_document
-                        }
-                }
-                }
-            ]
-        }]
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "text": system_prompt
+                    },
+                    {
+                        "document": {
+                            "name": "input_document",
+                            "format": document_type,
+                            "source": {
+                                "bytes": decoded_document
+                            }
+                    }
+                    }
+                ]
+            }]
+    else:
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "text": system_prompt
+                    }
+                ]
+            }]
+        
 
     tool_config = {
     "tools": [

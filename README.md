@@ -1,58 +1,94 @@
+# VEDIRA - Your Lesson Buddy
 
-# Welcome to your CDK Python project!
+## 🚀 **Overview**
 
-This is a blank project for CDK development with Python.
+**VEDIRA API** is the **serverless backend** that powers the VEDIRA educational platform. **AWS Lambda is the core compute foundation** - with **22 specialized Lambda functions** handling all business logic, from user authentication to AI-powered content generation. This repo serves the [**VEDIRA Flutter mobile app**](../lesson-buddy) with a completely serverless, event-driven architecture.
 
-The `cdk.json` file tells the CDK Toolkit how to execute your app.
+> **🔗 Frontend Repository**: [`lesson-buddy`](../lesson-buddy) - Flutter mobile application  
+> **🔗 Backend Repository**: `lesson-buddy-api` - This serverless API (current repository)
 
-This project is set up like a standard Python project.  The initialization
-process also creates a virtualenv within this project, stored under the `.venv`
-directory.  To create the virtualenv it assumes that there is a `python3`
-(or `python` for Windows) executable in your path with access to the `venv`
-package. If for any reason the automatic creation of the virtualenv fails,
-you can create the virtualenv manually.
+---
 
-To manually create a virtualenv on MacOS and Linux:
+## 🏗️ **Architecture**
 
+- **🚀 22 AWS Lambda Functions** - All business logic runs serverlessly
+- **🔄 AWS Step Functions** - Orchestrate complex content generation workflows
+- **🌐 API Gateway** - RESTful endpoints serving the mobile app
+- **🗄️ DynamoDB + S3** - Scalable data storage
+- **🤖 AI Integration** - Multi-provider AI content generation
+
+---
+
+## 🛠️ **AWS Services Used**
+
+### **Core Compute & Orchestration**
+- **AWS Lambda** (17 functions) - Authentication, course management, AI content generation
+- **AWS Step Functions** - Multi-step workflow orchestration
+- **API Gateway** - HTTP API endpoints
+
+### **Data & Storage**
+- **DynamoDB** (2 tables) - Course plans and flashcards
+- **S3** (3 buckets) - Lesson content, questions, course images
+- **Cognito** - User authentication and JWT management
+
+### **Infrastructure & Monitoring**
+- **AWS CDK** - Infrastructure as Code
+- **CloudFormation** - Resource deployment
+- **CloudWatch** - Logging and monitoring
+- **IAM** - Security and permissions
+
+### **AI & External Integration**
+- **AWS Bedrock** - Claude AI models
+- **External AI APIs** - Google AI Studio (Gemini) integration
+
+---
+
+## ✨ **Key Features**
+
+- **🎓 AI-Powered Course Generation** - Create personalized learning content
+- **🔐 Complete Authentication System** - User registration, login, verification
+- **📚 Course Management** - CRUD operations for educational content
+- **⚡ Serverless Architecture** - Auto-scaling, cost-effective, high availability
+- **📱 Mobile API** - Optimized endpoints for Flutter mobile app
+
+---
+
+## 🚀 **Quick Start**
+
+### **Prerequisites**
+- AWS CLI configured
+- AWS CDK installed (`npm install -g aws-cdk`)
+- Python 3.13+
+
+### **Deploy**
+```bash
+git clone [your-repo-url]
+cd lesson-buddy-api
+pip install -r requirements.txt
+cdk deploy
 ```
-$ python3 -m venv .venv
+
+### **Environment Variables**
+```bash
+API_KEY=your_google_ai_studio_key
+BEDROCK_API_KEY=your_aws_bedrock_key
 ```
 
-After the init process completes and the virtualenv is created, you can use the following
-step to activate your virtualenv.
+---
 
-```
-$ source .venv/bin/activate
-```
+## 📚 **Complete Documentation**
 
-If you are a Windows platform, you would activate the virtualenv like this:
+For detailed technical documentation, architecture decisions, Lambda function specifications, and implementation guides:
 
-```
-% .venv\Scripts\activate.bat
-```
+**📖 [REPOGUIDE.md](./REPOGUIDE.md)** - Comprehensive technical documentation
 
-Once the virtualenv is activated, you can install the required dependencies.
+---
 
-```
-$ pip install -r requirements.txt
-```
+## 🔗 **Related Repositories**
 
-At this point you can now synthesize the CloudFormation template for this code.
+- **[lesson-buddy](../lesson-buddy)** - Flutter mobile application frontend
+- **lesson-buddy-api** - This serverless backend API
 
-```
-$ cdk synth
-```
+---
 
-To add additional dependencies, for example other CDK libraries, just add
-them to your `setup.py` file and rerun the `pip install -r requirements.txt`
-command.
-
-## Useful commands
-
- * `cdk ls`          list all stacks in the app
- * `cdk synth`       emits the synthesized CloudFormation template
- * `cdk deploy`      deploy this stack to your default AWS account/region
- * `cdk diff`        compare deployed stack with current state
- * `cdk docs`        open CDK documentation
-
-Enjoy!
+*Serverless educational platform built with AWS Lambda*

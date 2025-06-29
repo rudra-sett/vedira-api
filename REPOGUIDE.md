@@ -4,7 +4,7 @@
 
 **VEDIRA** is a **100% serverless educational platform** built entirely on **AWS Lambda functions** as the core compute layer. This Lambda-first architecture provides:
 
-- **17 specialized Lambda functions** handling all business logic
+- **22 specialized Lambda functions** handling all business logic
 - **Event-driven processing** for scalable content generation
 - **Zero server management** with automatic scaling
 - **Pay-per-execution** cost optimization
@@ -86,7 +86,7 @@ lesson-buddy-api/
 | `get_flashcards` | Retrieve flashcards for a lesson | API Gateway GET /flashcards | Python 3.13 |
 | `get_image_data` | Fetch course/lesson images | API Gateway GET /get-image | Python 3.13 |
 
-### **System Functions (4 Lambda Functions)**
+### **System Functions (5 Lambda Functions)**
 | Function | Purpose | Trigger | Runtime |
 |----------|---------|---------|---------|
 | `extract_document_text` | Extract text from uploaded documents | File upload events | Python 3.13 |

@@ -2,10 +2,10 @@
 
 ## 🚀 **Overview**
 
-**VEDIRA API** is the **serverless backend** that powers the VEDIRA educational platform. **AWS Lambda is the core compute foundation** - with **22 specialized Lambda functions** handling all business logic, from user authentication to AI-powered content generation. This repo serves the [**VEDIRA Flutter mobile app**](../lesson-buddy) with a completely serverless, event-driven architecture.
+**VEDIRA API** is the **serverless backend** that powers the VEDIRA educational platform. **AWS Lambda is the core compute foundation** - with **22 specialized Lambda functions** handling all business logic, from user authentication to AI-powered content generation. This repo serves the [**VEDIRA Flutter mobile app**](https://github.com/DB-25/vedira) with a completely serverless, event-driven architecture.
 
-> **🔗 Frontend Repository**: [`lesson-buddy`](../lesson-buddy) - Flutter mobile application  
-> **🔗 Backend Repository**: `lesson-buddy-api` - This serverless API (current repository)
+> **🔗 Frontend Repository**: [`vedira`](https://github.com/DB-25/vedira) - Flutter mobile application  
+> **🔗 Backend Repository**: `vedira-api` - This serverless API (current repository)
 
 ---
 
@@ -62,8 +62,8 @@
 
 ### **Deploy**
 ```bash
-git clone [your-repo-url]
-cd lesson-buddy-api
+git clone https://github.com/rudra-sett/vedira-api.git
+cd vedira-api
 pip install -r requirements.txt
 cdk deploy
 ```
@@ -86,9 +86,11 @@ For detailed technical documentation, architecture decisions, Lambda function sp
 
 ## 🔗 **Related Repositories**
 
-- **[lesson-buddy](../lesson-buddy)** - Flutter mobile application frontend
-- **lesson-buddy-api** - This serverless backend API
+- **[vedira](https://github.com/DB-25/vedira)** - Flutter mobile application frontend
+- **[vedira-api](https://github.com/rudra-sett/vedira-api)** - This serverless backend API
 
 ---
 
 *Serverless educational platform built with AWS Lambda*
+
+Please note that you will see references to "Lesson Buddy" in this repository; this was an old name before we renamed our product to Vedira.

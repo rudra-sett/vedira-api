@@ -22,7 +22,7 @@
 ## 🛠️ **AWS Services Used**
 
 ### **Core Compute & Orchestration**
-- **AWS Lambda** (17 functions) - Authentication, course management, AI content generation
+- **AWS Lambda** (22 functions) - Authentication, course management, AI content generation
 - **AWS Step Functions** - Multi-step workflow orchestration
 - **API Gateway** - HTTP API endpoints
 
@@ -33,7 +33,6 @@
 
 ### **Infrastructure & Monitoring**
 - **AWS CDK** - Infrastructure as Code
-- **CloudFormation** - Resource deployment
 - **CloudWatch** - Logging and monitoring
 - **IAM** - Security and permissions
 
@@ -92,5 +91,7 @@ For detailed technical documentation, architecture decisions, Lambda function sp
 ---
 
 *Serverless educational platform built with AWS Lambda*
+
+Please note that you will see references to "Lesson Buddy" in this repository; this was an old name before we renamed our product to Vedira.
 
 Please note that you will see references to "Lesson Buddy" in this repository; this was an old name before we renamed our product to Vedira.

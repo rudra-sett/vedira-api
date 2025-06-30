@@ -93,5 +93,3 @@ For detailed technical documentation, architecture decisions, Lambda function sp
 *Serverless educational platform built with AWS Lambda*
 
 Please note that you will see references to "Lesson Buddy" in this repository; this was an old name before we renamed our product to Vedira.
-
-Please note that you will see references to "Lesson Buddy" in this repository; this was an old name before we renamed our product to Vedira.
